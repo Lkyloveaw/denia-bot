@@ -104,9 +104,13 @@ class MessageSender:
                 case _:
                     light.append(cont)
 
-        # 基础卡片渲染条件：单条重媒体配置或显式指定
+        # 卡片渲染条件：
+        #   - 恰好一个重媒体、没有轻媒体（单视频/单音频，最经典的情形）
+        #   - 或者设置了 single_heavy_render_card 且内容全部是轻媒体（图文笔记）
+        # 纯图文原来完全不渲染卡片：小红书笔记 9 张图命中这条，卡片永远不出。
         is_single_heavy = len(heavy) == 1 and not light
-        render_card = is_single_heavy and self.cfg.single_heavy_render_card
+        only_light = bool(light) and not heavy
+        render_card = (is_single_heavy or only_light) and self.cfg.single_heavy_render_card
         if render_card_override is not None:
             render_card = render_card_override
 
