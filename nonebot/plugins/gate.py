@@ -300,13 +300,17 @@ help_cmd = on_message(rule=is_help_command, priority=80, block=True)
 
 @help_cmd.handle()
 async def handle_help() -> None:
-    # 图片菜单优先；渲染或发送失败就退回纯文本，绝不能不回
+    # 图片菜单优先；渲染或发送失败就退回纯文本，绝不能不回。
+    # 注意不能把 matcher.finish() 放进 try：它抛的 FinishedException 继承 Exception，
+    # 会被当成「发送失败」吃掉，结果两条路都不生效、消息一条也不发。
+    path = None
     try:
+        path = await asyncio.to_thread(help_image)
+    except Exception:  # noqa: BLE001 - 渲染炸了就走文本
+        logger.debug('[gate] 帮助菜单图片渲染失败，回退文本', exc_info=True)
+
+    if path is not None:
         from nonebot.adapters.onebot.v11 import MessageSegment
 
-        path = await asyncio.to_thread(help_image)
-        if path is not None:
-            await help_cmd.finish(MessageSegment.image(path))
-    except Exception:  # noqa: BLE001
-        logger.debug('[gate] 帮助菜单图片发送失败，回退文本', exc_info=True)
+        await help_cmd.finish(MessageSegment.image(path))
     await help_cmd.finish(help_text())
