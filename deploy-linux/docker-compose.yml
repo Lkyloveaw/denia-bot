@@ -1,0 +1,59 @@
+# =====================================================================
+#  QQ 机器人 —— Linux 服务器部署用（Docker Compose）
+#  来源：NapCat-Docker 官方 compose/astrbot.yml（已按本机部署改造）
+#
+#  用法（在服务器上）：
+#      cd /opt/qqbot
+#      NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose up -d
+#      查看日志： docker compose logs -f
+#      停止：     docker compose down
+#
+#  首次启动后：
+#      1) 打开 http://服务器IP:6099   NapCat WebUI，扫码登录小号
+#      2) 打开 http://服务器IP:6185   AstrBot WebUI，配置大模型 + 人格
+#
+#  ⚠️ 生产环境务必：
+#      - 用 Nginx/Caddy 反代 + HTTPS，不要把 6185/6099 直接暴露到公网
+#      - 或只监听 127.0.0.1：把端口映射改成 "127.0.0.1:6185:6185"
+#      - 配合防火墙只放行必要端口
+# =====================================================================
+
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: always
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-1000}
+      - NAPCAT_GID=${NAPCAT_GID:-1000}
+      # MODE=astrbot 会自动配好到 astrbot 容器的 OneBot 反向 WS，无需手动填
+      - MODE=astrbot
+      - TZ=Asia/Shanghai
+    ports:
+      - "6099:6099"                 # NapCat WebUI（建议改 127.0.0.1:6099:6099）
+    volumes:
+      - ./data:/AstrBot/data        # 与 astrbot 共享，让 NapCat 直接读写 AstrBot 数据目录
+      - ./napcat/config:/app/napcat/config
+      - ./ntqq:/app/.config/QQ      # QQ 登录态持久化，容器重建不用重扫码
+    networks:
+      - astrbot_network
+
+  astrbot:
+    image: soulter/astrbot:latest
+    container_name: astrbot
+    restart: always
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "6185:6185"                 # AstrBot WebUI（建议改 127.0.0.1:6185:6185）
+      #- "6199:6199"                # OneBot 反向 WS；容器间内网互通，无需对宿主暴露
+    volumes:
+      - ./data:/AstrBot/data
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - astrbot_network
+
+networks:
+  astrbot_network:
+    driver: bridge
