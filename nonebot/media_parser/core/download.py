@@ -115,7 +115,7 @@ class Downloader:
                         logger.warning(
                             f"媒体 url: {url} 大小 {content_length / 1024 / 1024:.2f} MB 超过 {self.max_size} MB, 取消下载"
                         )
-                        raise SizeLimitException
+                        raise SizeLimitException(content_length, self.max_size)
 
                     downloaded = 0
                     with self.get_progress_bar(file_name, content_length) as bar:
@@ -125,7 +125,7 @@ class Downloader:
                             ):
                                 downloaded += len(chunk)
                                 if downloaded > max_bytes:
-                                    raise SizeLimitException
+                                    raise SizeLimitException(downloaded, self.max_size)
                                 await file.write(chunk)
                                 bar.update(len(chunk))
 
@@ -334,7 +334,7 @@ class Downloader:
             url, cookiefile=cookiefile, headers=headers, proxy=proxy
         )
         if info.duration > self.cfg.max_duration:
-            raise DurationLimitException
+            raise DurationLimitException(info.duration, self.cfg.max_duration)
 
         video_path = self.cfg.cache_dir / generate_file_name(url, ".mp4")
         if video_path.exists():

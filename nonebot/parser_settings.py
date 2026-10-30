@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 
 from apscheduler.triggers.cron import CronTrigger
@@ -81,6 +82,53 @@ def summary(platforms, baseline=None):
     total = len(platforms)
     enabled = [name for name, entry in platforms.items() if entry.get('enable') is True]
     return {'total': total, 'enabled': len(enabled), 'names': sorted(enabled)}
+
+
+def cache_stats(cache_dir: Path | None = None) -> dict:
+    """解析器缓存占用：文件数、总大小、最旧最新时间。
+
+    面板状态栏要显示它 —— 缓存全是下载下来的图和视频，不清会一直涨。
+    """
+    from media_parser.core.config import PluginConfig
+
+    directory = cache_dir or PluginConfig().cache_dir
+    if not directory.exists():
+        return {'files': 0, 'bytes': 0, 'oldest': '', 'newest': ''}
+
+    files = 0
+    total = 0
+    oldest = newest = 0.0
+    for path in directory.rglob('*'):
+        if not path.is_file():
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        files += 1
+        total += stat.st_size
+        oldest = min(oldest, stat.st_mtime) if oldest else stat.st_mtime
+        newest = max(newest, stat.st_mtime)
+
+    def fmt(ts: float) -> str:
+        return time.strftime('%Y-%m-%d %H:%M', time.localtime(ts)) if ts else ''
+
+    return {'files': files, 'bytes': total, 'oldest': fmt(oldest), 'newest': fmt(newest)}
+
+
+def events(limit: int = 100) -> dict:
+    """解析器的失败/超限事件，供面板日志页读取。"""
+    from media_parser.core.event_log import event_log
+
+    log = event_log()
+    return {'stats': log.stats(), 'entries': log.read(limit=limit)}
+
+
+def clear_events() -> dict:
+    from media_parser.core.event_log import event_log
+
+    event_log().clear()
+    return events()
 
 
 def validate(value, spec, label):

@@ -75,6 +75,7 @@ class ParserRuntime:
         task.add_done_callback(self.tasks.discard)
 
     async def process(self, bot, event, match):
+        keyword = found = None
         try:
             keyword, found = match
             session = session_key(event)
@@ -88,9 +89,9 @@ class ParserRuntime:
                 result = await self.parsers[keyword].parse(keyword, found)
             except Exception as exc:
                 platform = self.parsers[keyword].platform.name
+                self.log_failure(exc, platform=platform, url=found.group(0))
                 logger.warning(f'[parser] {platform} 解析失败：{type(exc).__name__}')
-                message = ('小红书解析失败，链接可能失效，或需要配置小红书 Cookie。'
-                           if platform == 'xhs' else '链接解析失败，请检查链接或稍后重试。')
+                message = self.failure_message(exc, platform)
                 try:
                     await asyncio.wait_for(bot.send(event, message), timeout=15)
                 except Exception:
@@ -101,8 +102,44 @@ class ParserRuntime:
             await self.sender.send_parse_result(Transport(bot, event, self.cfg), result)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception('[parser] 解析或发送失败')
+            platform = ''
+            try:
+                platform = self.parsers[keyword].platform.name if keyword else ''
+            except (KeyError, AttributeError):
+                pass
+            self.log_failure(exc, platform=platform, url=found.group(0) if found else '')
+
+    def log_failure(self, exc: Exception, *, platform: str = '', url: str = ''):
+        """把失败写进事件日志；超出阈值单独归类，面板上能一眼看出来。"""
+        try:
+            from .core.exception import DownloadLimitException
+            from .core.event_log import event_log
+
+            limit = isinstance(exc, DownloadLimitException)
+            detail = getattr(exc, 'detail', '') or str(exc) or type(exc).__name__
+            event_log(self.cfg).record(
+                'limit' if limit else 'error',
+                getattr(exc, 'reason', '') or type(exc).__name__,
+                detail,
+                platform=platform,
+                url=url,
+                extra={'type': type(exc).__name__},
+            )
+        except Exception:  # noqa: BLE001 - 记日志失败不能影响主流程
+            logger.debug('[parser] 事件日志写入失败', exc_info=True)
+
+    @staticmethod
+    def failure_message(exc: Exception, platform: str) -> str:
+        """失败提示。阈值类给出具体数值，其余按平台给通用文案。"""
+        from .core.exception import DownloadLimitException, human_size
+
+        if isinstance(exc, DownloadLimitException):
+            return f'解析失败：{getattr(exc, "detail", "") or str(exc)}'
+        if platform == 'xhs':
+            return '小红书解析失败，链接可能失效，或需要配置小红书 Cookie。'
+        return '链接解析失败，请检查链接或稍后重试。'
 
     async def close(self):
         for task in self.tasks:

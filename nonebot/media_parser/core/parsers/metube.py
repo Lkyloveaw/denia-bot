@@ -13,6 +13,7 @@ from nonebot import logger
 
 from ..config import PluginConfig
 from ..data import VideoContent
+from ..exception import human_duration
 from ..download import Downloader
 from ..exception import DownloadException, SizeLimitException
 from ..utils import generate_file_name, safe_unlink
@@ -405,7 +406,10 @@ class MetubeParser(BaseParser):
         if raw is not None:
             duration = float(raw.get("duration") or 0)
             if duration > self.cfg.max_duration:
-                reason = f"时长 {duration / 60:.1f} 分钟超限"
+                reason = (
+                    f"视频时长 {human_duration(duration)}，"
+                    f"超过上限 {self.cfg.max_duration:g} 分钟"
+                )
                 logger.info(f"[metube] 视频超限, 跳过 Metube 下载 | {reason} | {url}")
                 return self._reject_result(raw, reason)
 

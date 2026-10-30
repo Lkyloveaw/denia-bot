@@ -124,6 +124,10 @@ async def bot_status(req: Request):
         if health.get('state') == 'ready' and (new_token or new_pid):
             restart_controller.observe_ready()
     status['restart'] = {'running':restart_controller.running, 'error':restart_controller.error, 'available':restart_worker.available}
+    try:
+        status['cache'] = parser_settings.cache_stats()
+    except (OSError, ValueError):
+        status['cache'] = {'files':0, 'bytes':0, 'oldest':'', 'newest':''}
     return status
 
 @app.post('/api/bot-restart', status_code=202)
@@ -165,6 +169,18 @@ async def set_parser_config(req: Request):
     except FileExistsError as e: raise HTTPException(409, str(e))
     except (ValueError, TypeError) as e: raise HTTPException(400, str(e))
     except (OSError, sqlite3.Error): raise HTTPException(503, '解析器配置无法保存，请稍后重试')
+
+@app.get('/api/parser-events')
+def parser_events(req: Request, limit: int = 100):
+    authorized(req)
+    try: return parser_settings.events(limit=max(1, min(limit, 500)))
+    except (OSError, ValueError): raise HTTPException(503, '解析日志无法读取')
+
+@app.post('/api/parser-events/clear')
+async def clear_parser_events(req: Request):
+    mutate(req)
+    try: return parser_settings.clear_events()
+    except (OSError, ValueError): raise HTTPException(503, '解析日志无法清理')
 
 @app.get('/api/group/{gid}')
 def group(gid: str, req: Request):
