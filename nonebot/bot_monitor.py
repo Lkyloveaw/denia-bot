@@ -16,10 +16,49 @@ BOT_DIR = ROOT / 'nonebot'
 PASSWORD_FILE = ROOT / 'tools' / 'snowluma-webui-pass.txt'
 TARGET_UIN = '3892894069'
 HEALTH_URL = 'http://127.0.0.1:8080/dashboard-health'
-SNOWLUMA_URL = 'http://127.0.0.1:5099'
+# SnowLuma WebUI 的地址。容器部署常把端口绑到内网 IP（如 10.0.0.226:5099）而不是
+# 回环地址，写死 127.0.0.1 会探测失败、面板误报「未运行」。
+# 用 SNOWLUMA_URL 指定；不指定时依次试这几个候选地址。
+SNOWLUMA_URL = os.environ.get('SNOWLUMA_URL', '')
+SNOWLUMA_URLS = [u for u in [
+    SNOWLUMA_URL,
+    'http://127.0.0.1:5099',
+    'http://host.docker.internal:5099',
+] if u]
+SNOWLUMA_PORT = 5099
 # Linux 部署时托管 bot.py 的 systemd 单元；换了单元名用环境变量覆盖
 SERVICE_NAME = os.environ.get('QQBOT_SERVICE', 'qqbot.service')
 log = logging.getLogger(__name__)
+
+
+def snowluma_candidates():
+    """探测用的候选地址：显式配置优先，否则从本机网卡推导出 http://<内网IP>:5099。"""
+    if SNOWLUMA_URL:
+        return [SNOWLUMA_URL]
+    seen, result = set(), []
+    for url in SNOWLUMA_URLS:
+        if url not in seen:
+            seen.add(url); result.append(url)
+    for address in local_addresses():
+        url = f'http://{address}:{SNOWLUMA_PORT}'
+        if url not in seen:
+            seen.add(url); result.append(url)
+    return result
+
+
+def local_addresses():
+    """本机非回环 IPv4 地址（不起网络请求；拿不到就返回空）。"""
+    addresses = []
+    try:
+        import socket
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            address = info[4][0]
+            if address and not address.startswith('127.') and address not in addresses:
+                addresses.append(address)
+    except OSError:
+        return []
+    return addresses
 
 
 class Monitor:
@@ -27,11 +66,34 @@ class Monitor:
         self.password_file = password_file
         self.transport = transport
         self.token = None
+        self.snowluma_base = None
         self.retry_login_after = 0.0
         self.login_lock = asyncio.Lock()
 
     def client(self):
         return httpx.AsyncClient(timeout=3, trust_env=False, transport=self.transport)
+
+    async def snowluma_url(self, client):
+        """返回能连上的 SnowLuma 基地址；一个都连不上时抛 ConnectError。
+
+        找到后记住，后续探测不再逐个试，省掉每次 3 秒的超时等待。
+        """
+        if self.snowluma_base:
+            return self.snowluma_base
+        last = None
+        for base in snowluma_candidates():
+            try:
+                await client.get(base + '/')
+            except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.TimeoutException) as exc:
+                # 候选地址要能容忍各种失败：拒绝连接、被中途断开（host.docker.internal
+                # 就是这种）、超时 —— 只要还有一个能通，就不该整体判失败。
+                last = exc
+                continue
+            self.snowluma_base = base
+            return base
+        if last is not None:
+            raise last
+        raise httpx.ConnectError('no snowluma candidate', request=None)
 
     async def bot_health(self):
         try:
@@ -52,39 +114,56 @@ class Monitor:
     async def snowluma(self):
         try:
             async with self.client() as client:
+                base = await self.snowluma_url(client)
                 async with self.login_lock:
                     if not self.token:
                         try: password = self.password_file.read_text(encoding='utf-8').strip()
                         except OSError: password = ''
-                        if not password or time.monotonic() < self.retry_login_after:
-                            response = await client.get(SNOWLUMA_URL + '/')
-                            return {'state':'online' if response.status_code < 500 else 'unknown', 'injected':None, 'connected':None}
-                        response = await client.post(SNOWLUMA_URL + '/api/login', json={'password':password})
+                        if not password:
+                            response = await client.get(base + '/')
+                            online = response.status_code < 500
+                            return {'state':'online' if online else 'unknown', 'injected':None, 'connected':None,
+                                    'detail':'正在运行；未配置 tools/snowluma-webui-pass.txt，看不到注入状态' if online else 'WebUI 无响应',
+                                    'base':base, 'reason':'no-password' if online else 'unreachable'}
+                        if time.monotonic() < self.retry_login_after:
+                            response = await client.get(base + '/')
+                            online = response.status_code < 500
+                            return {'state':'online' if online else 'unknown', 'injected':None, 'connected':None,
+                                    'detail':'登录失败，稍后重试' if online else 'WebUI 无响应', 'base':base,
+                                    'reason':'login-failed'}
+                        response = await client.post(base + '/api/login', json={'password':password})
                         response.raise_for_status()
                         data = response.json()
-                        if not isinstance(data, dict): return {'state':'online', 'injected':None, 'connected':None}
+                        if not isinstance(data, dict):
+                            return {'state':'online', 'injected':None, 'connected':None, 'base':base, 'reason':'login-failed'}
                         self.token = data.get('token')
                         if not isinstance(self.token, str) or not self.token:
                             self.token = None
                             self.retry_login_after = time.monotonic() + 60
-                            return {'state':'online', 'injected':None, 'connected':None}
-                response = await client.get(SNOWLUMA_URL + '/api/processes', headers={'Authorization':'Bearer '+self.token})
+                            return {'state':'online', 'injected':None, 'connected':None, 'base':base, 'reason':'login-failed',
+                                    'detail':'WebUI 登录未返回令牌，检查 tools/snowluma-webui-pass.txt'}
+                response = await client.get(base + '/api/processes', headers={'Authorization':'Bearer '+self.token})
                 if response.status_code in (401, 403):
                     self.token = None
-                    return {'state':'online', 'injected':None, 'connected':None}
+                    return {'state':'online', 'injected':None, 'connected':None, 'base':base, 'reason':'login-failed',
+                            'detail':'WebUI 令牌已失效，检查 tools/snowluma-webui-pass.txt'}
                 response.raise_for_status()
                 data = response.json()
                 processes = data.get('list') if isinstance(data, dict) else None
-                if not isinstance(processes, list): return {'state':'online', 'injected':None, 'connected':None}
+                if not isinstance(processes, list):
+                    return {'state':'online', 'injected':None, 'connected':None, 'base':base, 'reason':'unexpected'}
                 found = [p for p in processes if isinstance(p, dict) and p.get('injected') and str(p.get('uin') or '') == TARGET_UIN]
                 unknown = any(isinstance(p, dict) and p.get('injected') and str(p.get('uin') or '') in ('', '0') for p in processes)
-                return {'state':'online', 'injected':True if found else None if unknown else False, 'connected':any(p.get('connected') for p in found) if found else None}
+                return {'state':'online', 'injected':True if found else None if unknown else False,
+                        'connected':any(p.get('connected') for p in found) if found else None,
+                        'base':base, 'reason':'ok'}
         except httpx.HTTPStatusError:
             self.token = None
             self.retry_login_after = time.monotonic() + 60
             return {'state':'online', 'injected':None, 'connected':None}
         except httpx.ConnectError:
             self.token = None
+            self.snowluma_base = None
             return {'state':'offline', 'injected':None, 'connected':None}
         except (httpx.RequestError, ValueError, TypeError):
             self.token = None

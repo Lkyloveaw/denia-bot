@@ -68,8 +68,41 @@ SnowLuma 是**进程级注入**，同一 QQ 客户端里登录的所有号都会
 - 逃生通道：把 `echo-test`（`provider: _echo`）的 `default` 改成 `true`，机器人会回显请求内容 —— 用来确认链路本身是活的
 - **热重载例外**：`models.yml` 热重载，但插件开关（`.env` 里的 `PROMPT_GUARD` 等）改完必须重启
 
-## 7. 知识库（RAG）
+## 6.5 管理面板的 SnowLuma 状态显示
 
+面板上「SnowLuma 注入」显示 **未运行** 时，先分清是真没跑还是探测不到：
+
+| 面板显示 | 含义 | 处理 |
+|---|---|---|
+| 未运行 | 所有候选地址都连不上 | `docker ps` 看 `qqbot-snowluma` 是否在跑；`systemctl status qqbot-dashboard` 看面板是否正常 |
+| 已注入 / 已注入并连接 | 正常 | 无需处理 |
+| 状态未知 | WebUI 通了但拿不到注入状态 | 见下方两种原因 |
+
+**原因一：端口绑在内网 IP 而不是回环地址。**
+compose 里 `ports: "10.0.0.226:5099:5099"` 只监听该 IP，探 `127.0.0.1:5099` 会直接失败。
+探测会依次尝试 `SNOWLUMA_URL`（如设置）→ `127.0.0.1:5099` → `host.docker.internal:5099` →
+本机各内网 IP 的 `:5099`，命中后记住该地址。所以要固定用某个地址，就在面板的 service 里设：
+
+```ini
+Environment=SNOWLUMA_URL=http://10.0.0.226:5099
+```
+
+**原因二：没有 WebUI 密码，读不到注入状态。**
+面板读 `tools/snowluma-webui-pass.txt` 登录 SnowLuma WebUI。文件缺失时仍能判定
+「在运行」，但看不到注入情况，提示里会直接写明。写入密码即可：
+
+```bash
+mkdir -p /opt/qqbot/tools
+printf '%s' '你的SnowLuma访问令牌' > /opt/qqbot/tools/snowluma-webui-pass.txt
+chmod 600 /opt/qqbot/tools/snowluma-webui-pass.txt
+systemctl restart qqbot-dashboard
+```
+
+> `snowluma/config/webui.json` 里只有 scrypt 哈希，反推不出明文；令牌丢了重置密码。
+> 拿不到也没关系，注入状态可以直接看容器日志：
+> `docker logs qqbot-snowluma | grep "login detected"`
+
+## 7. 知识库（RAG）
 ```
 knowledge/*.md  ──build_index──▶  rag/index/{chunks,tokens,lexicon,vectors}  ──serve──▶  :8091
 ```

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
-from bot_monitor import LinuxSystemdRestart, Monitor, RestartController, WindowsRestart
+from bot_monitor import LinuxSystemdRestart, Monitor, RestartController, WindowsRestart, snowluma_candidates
 
 
 class MonitorTests(unittest.TestCase):
@@ -140,6 +140,83 @@ class MonitorTests(unittest.TestCase):
             with patch.object(worker, 'stop_and_start'), patch('bot_monitor.asyncio.sleep', new_callable=AsyncMock):
                 await worker()
             self.assertEqual(fake.bot_health.await_count, 4)
+        asyncio.run(run())
+
+
+    def test_snowluma_falls_back_to_lan_address_when_loopback_refuses(self):
+        """容器把端口绑在内网 IP 上时，只探 127.0.0.1 会误报 offline。"""
+        async def run():
+            def handler(request):
+                if request.url.host == '127.0.0.1':
+                    raise httpx.ConnectError('refused', request=request)
+                if request.url.path == '/api/login':
+                    return httpx.Response(200, json={'token':'test-token'})
+                if request.url.path == '/api/processes':
+                    return httpx.Response(200, json={'list':[{'injected':True, 'uin':'3892894069', 'connected':True}]})
+                return httpx.Response(200, text='webui')
+            with tempfile.TemporaryDirectory() as tmp:
+                password = Path(tmp)/'password'
+                password.write_text('test', encoding='utf-8')
+                monitor = Monitor(password_file=password, transport=httpx.MockTransport(handler))
+                with patch('bot_monitor.snowluma_candidates', return_value=['http://127.0.0.1:5099', 'http://10.0.0.226:5099']):
+                    result = await monitor.snowluma()
+                self.assertEqual(result['state'], 'online')
+                self.assertEqual(result['injected'], True)
+                self.assertEqual(monitor.snowluma_base, 'http://10.0.0.226:5099')
+        asyncio.run(run())
+
+    def test_snowluma_reports_offline_only_when_every_candidate_fails(self):
+        async def run():
+            def handler(request):
+                raise httpx.ConnectError('refused', request=request)
+            with tempfile.TemporaryDirectory() as tmp:
+                password = Path(tmp)/'password'
+                password.write_text('test', encoding='utf-8')
+                monitor = Monitor(password_file=password, transport=httpx.MockTransport(handler))
+                with patch('bot_monitor.snowluma_candidates', return_value=['http://127.0.0.1:5099', 'http://10.0.0.226:5099']):
+                    result = await monitor.snowluma()
+                self.assertEqual(result['state'], 'offline')
+                self.assertIsNone(monitor.snowluma_base)
+        asyncio.run(run())
+
+    def test_explicit_snowluma_url_wins_over_derived_candidates(self):
+        with patch('bot_monitor.SNOWLUMA_URL', 'http://example.internal:5099'):
+            self.assertEqual(snowluma_candidates(), ['http://example.internal:5099'])
+
+
+    def test_candidate_rejected_mid_connection_does_not_abort_discovery(self):
+        """host.docker.internal 这类地址会抛 RemoteProtocolError 而不是 ConnectError。"""
+        async def run():
+            def handler(request):
+                if request.url.host == 'host.docker.internal':
+                    raise httpx.RemoteProtocolError('Server disconnected without sending a response.')
+                if request.url.path == '/api/login':
+                    return httpx.Response(200, json={'token':'test-token'})
+                if request.url.path == '/api/processes':
+                    return httpx.Response(200, json={'list':[{'injected':True, 'uin':'3892894069', 'connected':True}]})
+                return httpx.Response(200, text='webui')
+            with tempfile.TemporaryDirectory() as tmp:
+                password = Path(tmp)/'password'
+                password.write_text('test', encoding='utf-8')
+                monitor = Monitor(password_file=password, transport=httpx.MockTransport(handler))
+                with patch('bot_monitor.snowluma_candidates', return_value=['http://host.docker.internal:5099', 'http://10.0.0.226:5099']):
+                    result = await monitor.snowluma()
+                self.assertEqual(result['state'], 'online')
+                self.assertEqual(monitor.snowluma_base, 'http://10.0.0.226:5099')
+        asyncio.run(run())
+
+    def test_missing_password_reports_running_but_unverifiable(self):
+        """没有 WebUI 密码时仍应判为「在跑」，并说明为什么看不到注入状态。"""
+        async def run():
+            def handler(request):
+                return httpx.Response(200, text='webui')
+            monitor = Monitor(password_file=Path('/nonexistent/password'), transport=httpx.MockTransport(handler))
+            with patch('bot_monitor.snowluma_candidates', return_value=['http://10.0.0.226:5099']):
+                result = await monitor.snowluma()
+            self.assertEqual(result['state'], 'online')
+            self.assertIsNone(result['injected'])
+            self.assertEqual(result['reason'], 'no-password')
+            self.assertIn('snowluma-webui-pass', result['detail'])
         asyncio.run(run())
 
 

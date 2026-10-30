@@ -32,7 +32,7 @@ async function loadBotStatus(){let seq=++statusRequest;try{let s=await api('/api
   indicator('botInjection',l.injected===true?(l.connected?'已注入并连接':'已注入'):l.injected===false?'未注入':l.state==='offline'?'SnowLuma 未运行':'状态未知',l.injected===true?'ok':l.injected===false||l.state==='offline'?'bad':'unknown');
   indicator('botRag',s.rag.state==='online'?'运行中':s.rag.state==='offline'?'未运行':'状态未知',s.rag.state==='online'?'ok':s.rag.state==='offline'?'bad':'unknown');
   $('restartBot').disabled=restartPending||r.running||!r.available;$('restartBot').textContent=r.running?'启动中…':'重启机器人';
-  $('botDetails').textContent=r.error||(!r.available?'当前运行环境不支持自动重启':r.running?'正在等待新进程启动完成':l.state==='online'&&l.injected===null?'SnowLuma 已运行，但无法确认目标账号的注入状态。':'状态更新于 '+new Date().toLocaleTimeString());
+  $('botDetails').textContent=r.error||(!r.available?'当前运行环境不支持自动重启':r.running?'正在等待新进程启动完成':l.detail?`SnowLuma：${l.detail}`:l.state==='online'&&l.injected===null?'SnowLuma 已运行，但无法确认目标账号的注入状态。':'状态更新于 '+new Date().toLocaleTimeString());
 }catch(e){if(seq!==statusRequest)return;$('restartBot').disabled=true;$('botDetails').textContent='状态读取失败：'+e.message}}
 function startStatusPolling(){if(!statusTimer)statusTimer=setInterval(loadBotStatus,5000)}
 function confirmRestart(){if(!$('restartBot').disabled)$('restartDialog').showModal()}
