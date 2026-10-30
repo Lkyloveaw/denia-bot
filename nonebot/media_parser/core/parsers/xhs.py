@@ -113,6 +113,26 @@ def image_candidates(image: Struct) -> list[str]:
     return urls
 
 
+def declared_size(image: Struct) -> tuple[int, int] | None:
+    """笔记里声明的图片原始尺寸（`imageList[i].width/height`）。"""
+    try:
+        w = int(getattr(image, "width", 0) or 0)
+        h = int(getattr(image, "height", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    return (w, h) if w > 0 and h > 0 else None
+
+
+def image_size(path: Path) -> tuple[int, int] | None:
+    try:
+        from PIL import Image
+
+        with Image.open(path) as img:
+            return img.size
+    except Exception:  # noqa: BLE001 - 只为诊断，量不到就算了
+        return None
+
+
 def is_heif(path: Path) -> bool:
     """按文件头判断是不是 HEIF/HEIC（ISO BMFF：第 4~12 字节含 ftyp + brand）。"""
     try:
@@ -231,6 +251,7 @@ class XHSParser(BaseParser):
         原图常是苹果手机拍的 HEIC —— QQ 显示不了，别看扩展名是 .jpg。
         处理顺序：原图下载 → 是 HEIF 就本地转 JPEG（保留原分辨率）
                   → 转不动才退回 CDN 压缩图 → 最后纠正扩展名。
+        下完记一笔「拿到多大 / 笔记声明多大」，用于判断是不是平台侧压过了。
         """
         candidates = image_candidates(image)
         if not candidates:
@@ -243,8 +264,8 @@ class XHSParser(BaseParser):
         if is_heif(path):
             converted = await asyncio.to_thread(convert_heif_to_jpeg, path)
             if converted is not None:
-                return converted
-            if len(candidates) > 1:
+                path = converted
+            elif len(candidates) > 1:
                 logger.info(f"HEIC 无法转换（{path.name}），改用压缩图")
                 try:
                     path = await self.downloader.download_img(
@@ -253,7 +274,30 @@ class XHSParser(BaseParser):
                 except Exception as e:  # noqa: BLE001 - 压缩图也失败就交回原图
                     logger.warning(f"HEIC 回退压缩图失败，仍用原图：{e}")
 
-        return fix_image_suffix(path)
+        path = fix_image_suffix(path)
+        self._log_resolution(image, path)
+        return path
+
+    @staticmethod
+    def _log_resolution(image: Any, path: Path) -> None:
+        """对比「拿到的尺寸」与「笔记声明的尺寸」。
+
+        小红书的 `1040g2sg…` 这类新 token 在 CDN 上只存了一份压缩版（1440 宽），
+        无论怎么换路径都拿不到更大 —— 这不是解析器的问题，是平台侧只存了这份。
+        `notes_pre_post/…` 那种则能拿到几千万像素的原始 JPEG。
+        记一行日志，下次觉得「不像原图」时能直接确认是哪一种。
+        """
+        got = image_size(path)
+        declared = declared_size(image)
+        if not got:
+            return
+        if declared and declared[0] > got[0] + 8:
+            logger.info(
+                f"小红书图片尺寸 {got[0]}x{got[1]}，笔记声明 {declared[0]}x{declared[1]}"
+                f"（平台只提供压缩版，非解析器问题）：{path.name}"
+            )
+        else:
+            logger.debug(f"小红书图片尺寸 {got[0]}x{got[1]}：{path.name}")
 
     async def _image_contents(self, images: list[Any]) -> list[Any]:
         """把图片列表转成图片内容，每张走「原图优先 + HEIC 回退」。"""
@@ -316,7 +360,8 @@ class XHSParser(BaseParser):
             url: str | None = None
             urlSizeLarge: str | None = None
             stream: dict[str, Any] | None = None
-
+            width: int | None = None
+            height: int | None = None
         class User(Struct):
             nickname: str
             avatar: str
@@ -393,6 +438,8 @@ class XHSParser(BaseParser):
             url: str
             urlSizeLarge: str | None = None
             stream: dict[str, Any] | None = None
+            width: int | None = None
+            height: int | None = None
 
         class User(Struct):
             nickName: str
