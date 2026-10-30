@@ -10,6 +10,9 @@ tools/atrust-backup/
 axonhub/config.yml
 axonhub/axonhub.db*
 knowledge/本地私有/
+# 协议端登录二维码截图（含登录凭据，绝不能外传）
+扫码登录.png
+*.qr.png
 
 # 运行时生成的凭据 / 带个人数据的状态
 nonebot/data/

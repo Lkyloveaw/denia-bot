@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
-from bot_monitor import Monitor, RestartController, WindowsRestart
+from bot_monitor import LinuxSystemdRestart, Monitor, RestartController, WindowsRestart
 
 
 class MonitorTests(unittest.TestCase):
@@ -100,6 +100,47 @@ class MonitorTests(unittest.TestCase):
                 self.assertEqual(start.call_args.args[0], [str(botdir/'.venv'/'Scripts'/'python.exe'), 'bot.py'])
                 self.assertEqual(start.call_args.kwargs['cwd'], str(botdir))
                 self.assertEqual(start.call_args.kwargs['env']['QQBOT_START_TOKEN'], worker.expected_token)
+
+
+    @unittest.skipIf(sys.platform == 'win32', 'systemd only')
+    def test_systemd_backend_is_used_on_linux(self):
+        with patch('bot_monitor.shutil.which', return_value='/usr/bin/systemctl'), \
+             patch('bot_monitor.subprocess.run', return_value=Mock(returncode=0, stdout='', stderr='')):
+            worker = LinuxSystemdRestart(None, unit='qqbot.service')
+            self.assertTrue(worker.available)
+
+    def test_systemd_backend_reports_unavailable_without_the_unit(self):
+        runner = Mock(return_value=Mock(returncode=1, stdout='', stderr='Unit not found'))
+        worker = LinuxSystemdRestart(None, unit='missing.service', runner=runner)
+        with patch('bot_monitor.sys.platform', 'linux'), patch('bot_monitor.shutil.which', return_value='/usr/bin/systemctl'):
+            self.assertFalse(worker.available)
+        self.assertNotIn('restart', runner.call_args.args[0])
+
+    def test_systemd_restart_failure_surfaces_stderr(self):
+        def runner(args, **kwargs):
+            if args[:2] == ['systemctl', 'cat']: return Mock(returncode=0, stdout='', stderr='')
+            return Mock(returncode=1, stdout='', stderr='Job for qqbot.service failed\nmore')
+        worker = LinuxSystemdRestart(None, unit='qqbot.service', runner=runner)
+        with patch('bot_monitor.sys.platform', 'linux'), patch('bot_monitor.shutil.which', return_value='/usr/bin/systemctl'):
+            self.assertTrue(worker.available)
+            with self.assertRaises(RuntimeError) as caught:
+                worker.stop_and_start()
+        self.assertIn('Job for qqbot.service failed', str(caught.exception))
+
+    def test_systemd_worker_waits_for_a_new_main_pid(self):
+        async def run():
+            fake = type('FakeMonitor', (), {})()
+            fake.bot_health = AsyncMock(side_effect=[
+                {'state':'ready', 'pid':46943},
+                {'state':'unknown'},
+                {'state':'ready', 'pid':46943},
+                {'state':'ready', 'pid':51000},
+            ])
+            worker = LinuxSystemdRestart(fake, unit='qqbot.service', runner=Mock(return_value=Mock(returncode=0, stdout='MainPID=46943', stderr='')))
+            with patch.object(worker, 'stop_and_start'), patch('bot_monitor.asyncio.sleep', new_callable=AsyncMock):
+                await worker()
+            self.assertEqual(fake.bot_health.await_count, 4)
+        asyncio.run(run())
 
 
 if __name__ == '__main__':

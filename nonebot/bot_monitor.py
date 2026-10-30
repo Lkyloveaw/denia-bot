@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -16,6 +17,8 @@ PASSWORD_FILE = ROOT / 'tools' / 'snowluma-webui-pass.txt'
 TARGET_UIN = '3892894069'
 HEALTH_URL = 'http://127.0.0.1:8080/dashboard-health'
 SNOWLUMA_URL = 'http://127.0.0.1:5099'
+# Linux 部署时托管 bot.py 的 systemd 单元；换了单元名用环境变量覆盖
+SERVICE_NAME = os.environ.get('QQBOT_SERVICE', 'qqbot.service')
 log = logging.getLogger(__name__)
 
 
@@ -135,7 +138,104 @@ class RestartController:
             self.error = ''
 
 
+class LinuxSystemdRestart:
+    """systemd 托管时的重启：`systemctl restart`，用主 PID 变化判断新进程就绪。
+
+    面板进程需要能调用 systemctl（root，或在 sudoers 里放行这条命令）；
+    否则 `available` 会返回 False，按钮显示「不支持自动重启」而不是点了没反应。
+    """
+    def __init__(self, monitor, unit=SERVICE_NAME, runner=None):
+        self.monitor = monitor
+        self.unit = unit
+        self.runner = runner or subprocess.run
+        self.expected_token = None
+        self.previous_pid = None
+        self.previous_state = None
+
+    @property
+    def available(self):
+        if sys.platform.startswith('win'): return False
+        if shutil.which('systemctl') is None: return False
+        try:
+            result = self.runner(['systemctl', 'cat', self.unit], capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return result.returncode == 0
+
+    def main_pid(self):
+        try:
+            result = self.runner(['systemctl', 'show', self.unit, '-p', 'MainPID'], capture_output=True, timeout=10, text=True)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if result.returncode: return None
+        text = (result.stdout or '').strip()
+        if not text.startswith('MainPID='): return None
+        try: return int(text.split('=', 1)[1])
+        except ValueError: return None
+
+    def stop_and_start(self):
+        if not self.available: raise RuntimeError('当前环境不支持自动重启')
+        try:
+            result = self.runner(['systemctl', 'restart', self.unit], capture_output=True, timeout=60, text=True)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError('重启超时，请检查 systemctl 状态')
+        except OSError as exc:
+            raise RuntimeError(f'无法调用 systemctl：{exc}')
+        if result.returncode:
+            detail = ((result.stderr or result.stdout or '').strip().splitlines() or [''])[0]
+            raise RuntimeError(f'systemctl restart 失败{("：" + detail) if detail else ""}')
+
+    async def __call__(self):
+        self.expected_token = None
+        previous = await self.monitor.bot_health()
+        self.previous_state = previous.get('state')
+        self.previous_pid = previous.get('pid') if previous.get('state') == 'ready' else None
+        if self.previous_pid is None:
+            self.previous_pid = self.main_pid()
+        await asyncio.to_thread(self.stop_and_start)
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            health = await self.monitor.bot_health()
+            pid = health.get('pid') or self.main_pid()
+            if health.get('state') == 'ready' and (self.previous_pid is None or (pid and pid != self.previous_pid)):
+                return
+            await asyncio.sleep(2)
+        raise RuntimeError('机器人尚未就绪，请查看日志；按钮将在启动完成后恢复')
+
+
+class Restart:
+    """按平台挑实现：Windows 走 restarter 脚本，Linux 走 systemd。"""
+
+    def __init__(self, monitor, unit=SERVICE_NAME):
+        self.monitor = monitor
+        self.unit = unit
+        self.backends = [WindowsRestart(monitor), LinuxSystemdRestart(monitor, unit)]
+        self.active = next((b for b in self.backends if b.available), None)
+        self.expected_token = None
+        self.previous_pid = None
+        self.previous_state = None
+
+    @property
+    def available(self):
+        return self.active is not None
+
+    def __getattr__(self, name):
+        active = self.__dict__.get('active')
+        if active is not None and hasattr(active, name):
+            return getattr(active, name)
+        raise AttributeError(name)
+
+    async def __call__(self):
+        if self.active is None: raise RuntimeError('当前环境不支持自动重启')
+        await self.active()
+        self.expected_token = self.active.expected_token
+        self.previous_pid = self.active.previous_pid
+        self.previous_state = self.active.previous_state
+
+
 class WindowsRestart:
+    """Windows 上的重启：调 restarter 脚本停进程，再带一次性 token 起新进程。"""
+
     def __init__(self, monitor):
         self.monitor = monitor
         self.expected_token = None

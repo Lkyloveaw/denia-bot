@@ -1,11 +1,12 @@
 """QQ 机器人入口 —— SnowLuma (OneBot v11) + NoneBot2 + MuiceBot"""
 
-import os
-from conversation_header import configure
-os.environ['OPENAI_CUSTOM_HEADERS'] = configure()
-
 import nonebot
+import os
 from nonebot.adapters.onebot.v11 import Adapter as OneBotV11Adapter
+from conversation_header import configure
+
+# SDK clients created during this process share the ID; each restart gets a new one.
+os.environ['OPENAI_CUSTOM_HEADERS'] = configure()
 
 # 初始化 NoneBot（读取 .env）
 nonebot.init()
@@ -14,6 +15,16 @@ driver = nonebot.get_driver()
 
 # 注册 OneBot v11 适配器（SnowLuma 走这个协议）
 driver.register_adapter(OneBotV11Adapter)
+
+@nonebot.get_app().get('/dashboard-health', include_in_schema=False)
+async def dashboard_health():
+    return {
+        'service': 'qqbot-nonebot',
+        'ready': True,
+        'connected': '3892894069' in nonebot.get_bots(),
+        'pid': os.getpid(),
+        'start_token': os.environ.get('QQBOT_START_TOKEN'),
+    }
 
 # MuiceBot —— LLM 聊天 + 人格模板
 nonebot.load_plugin("muicebot")

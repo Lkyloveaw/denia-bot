@@ -15,7 +15,7 @@ import group_topics_logic as topics
 import weather_service as weather
 import master_settings
 import parser_settings
-from bot_monitor import Monitor, RestartController, WindowsRestart
+from bot_monitor import Monitor, Restart, RestartController, WindowsRestart  # noqa: F401 - 测试仍按旧名引用
 
 ROOT = Path(__file__).resolve().parent
 AUTH_FILE = ROOT / 'data' / 'dashboard-auth.json'
@@ -23,7 +23,7 @@ sessions = {}
 attempts = {}
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 monitor = Monitor()
-restart_worker = WindowsRestart(monitor)
+restart_worker = Restart(monitor)
 restart_controller = RestartController(restart_worker)
 
 def set_password(password, must_change=False):
