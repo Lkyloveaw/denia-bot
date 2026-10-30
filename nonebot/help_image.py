@@ -184,13 +184,31 @@ def render_help_image(
         draw.rectangle([PAD, height - foot_h, WIDTH - PAD, height - foot_h + 1], fill=LINE)
         draw.text((PAD, height - foot_h + 20), footer, font=font_foot, fill=MUTED)
 
-        out = Path('/tmp') / 'qqbot-help.png'
-        try:
-            img.save(out, 'PNG')
-        except OSError:
-            out = Path('help.png').resolve()
-            img.save(out, 'PNG')
+        out = _output_path()
+        img.save(out, 'PNG')
         return out
     except Exception:  # noqa: BLE001 - 渲染失败必须回退文本
         logger.exception('[help] 菜单图片渲染失败')
         return None
+
+
+def _output_path() -> Path:
+    """选一个协议端**能读到**的目录存图。
+
+    协议端常跑在 Docker 里，只有挂载进来的目录可见。早期写到 `/tmp`，
+    宿主机有、容器里没有，发送时就报
+    `ActionFailed: ENOENT ... stat '/tmp/qqbot-help.png'` —— 图渲染成功但发不出去。
+
+    解析器的缓存目录正是挂载给容器的那一个（`snowluma/parser-cache`），
+    文件落在那里协议端才读得到。拿不到就退回系统临时目录。
+    """
+    try:
+        from media_parser.core.config import PluginConfig
+
+        cache = PluginConfig().cache_dir
+        cache.mkdir(parents=True, exist_ok=True)
+        return cache / 'qqbot-help.png'
+    except Exception:  # noqa: BLE001 - 配置读不出来就用临时目录
+        import tempfile
+
+        return Path(tempfile.gettempdir()) / 'qqbot-help.png'

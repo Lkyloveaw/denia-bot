@@ -311,6 +311,13 @@ async def handle_help() -> None:
 
     if path is not None:
         from nonebot.adapters.onebot.v11 import MessageSegment
+        from nonebot.exception import FinishedException
 
-        await help_cmd.finish(MessageSegment.image(path))
+        logger.debug(f'[gate] 帮助菜单图片：{path}')
+        try:
+            await help_cmd.finish(MessageSegment.image(path))
+        except FinishedException:
+            raise          # 正常结束，必须放行，否则两条路都发不出去
+        except Exception as exc:  # noqa: BLE001 - 真的发送失败才回退文本
+            logger.warning(f'[gate] 帮助菜单图片发送失败（{type(exc).__name__}: {exc}），回退文本')
     await help_cmd.finish(help_text())
