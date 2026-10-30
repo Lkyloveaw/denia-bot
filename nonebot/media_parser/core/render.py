@@ -275,19 +275,37 @@ class Renderer:
     REPOST_SCALE = 0.88
     """转发缩放比例"""
 
-    # 颜色配置
-    BG_COLOR: ClassVar[Color] = (255, 255, 255)
+    # 颜色配置（claude 主题：暖米白纸面 + 橙棕点缀，留白更松）
+    # 想切回原来的纯白配色：把 THEME 设成 "default"。
+    THEME = "claude"
+
+    BG_COLOR: ClassVar[Color] = (250, 249, 245)
     """背景色"""
-    TEXT_COLOR: ClassVar[Color] = (51, 51, 51)
+    TEXT_COLOR: ClassVar[Color] = (41, 39, 33)
     """文本色"""
-    HEADER_COLOR: ClassVar[Color] = (0, 122, 255)
+    HEADER_COLOR: ClassVar[Color] = (198, 110, 78)
     """标题色"""
-    EXTRA_COLOR: ClassVar[Color] = (136, 136, 136)
+    EXTRA_COLOR: ClassVar[Color] = (129, 126, 115)
     """额外信息色"""
-    REPOST_BG_COLOR: ClassVar[Color] = (247, 247, 247)
+    REPOST_BG_COLOR: ClassVar[Color] = (240, 238, 231)
     """转发背景色"""
-    REPOST_BORDER_COLOR: ClassVar[Color] = (230, 230, 230)
+    REPOST_BORDER_COLOR: ClassVar[Color] = (232, 229, 220)
     """转发边框色"""
+    ACCENT_COLOR: ClassVar[Color] = (198, 110, 78)
+    """强调色：来源标识、页脚水印"""
+    PAPER_COLOR: ClassVar[Color] = (255, 254, 250)
+    """卡片纸面色（比背景略亮，形成层次）"""
+
+    _DEFAULT_PALETTE = {
+        "BG_COLOR": (255, 255, 255),
+        "TEXT_COLOR": (51, 51, 51),
+        "HEADER_COLOR": (0, 122, 255),
+        "EXTRA_COLOR": (136, 136, 136),
+        "REPOST_BG_COLOR": (247, 247, 247),
+        "REPOST_BORDER_COLOR": (230, 230, 230),
+        "ACCENT_COLOR": (0, 122, 255),
+        "PAPER_COLOR": (255, 255, 255),
+    }
 
     # 资源名称
     _EMOJIS = "emojis"
@@ -308,12 +326,21 @@ class Renderer:
 
     def __init__(self, config: PluginConfig):
         self.cfg = config
+        # 主题在实例化时落到实例属性上，改类属性不会污染其它实例
+        if self.THEME != "claude":
+            for name, color in self._DEFAULT_PALETTE.items():
+                setattr(self, name, color)
         self.EMOJI_SOURCE = EmojiCDNSource(
             base_url=self.cfg.emoji_cdn,
             style=self.cfg.emoji_style,
             cache_dir=self.cfg.cache_dir / self._EMOJIS,
         )
         """Emoji Source"""
+
+        # 字体/按钮/平台 logo 只加载一次；原来由 AstrBot 框架在启动时调用，
+        # 迁到 NoneBot 后这一步被漏掉了，导致渲染时报 AttributeError: fontset
+        if not hasattr(type(self), "fontset"):
+            type(self).load_resources()
 
     @classmethod
     def load_resources(cls):
