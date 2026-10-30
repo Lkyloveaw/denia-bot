@@ -133,6 +133,31 @@ def image_size(path: Path) -> tuple[int, int] | None:
         return None
 
 
+_JS_NOISE = [
+    (re.compile(r'new Map\(\[\]\)'), '{}'),
+    (re.compile(r'new Map\('), '{'),
+    (re.compile(r'new Set\(\[\]\)'), '[]'),
+    (re.compile(r'new Set\('), '['),
+    (re.compile(r'\bundefined\b'), 'null'),
+    (re.compile(r'\bNaN\b'), 'null'),
+    (re.compile(r'\bInfinity\b'), 'null'),
+]
+
+
+def _js_to_json(raw: str) -> str:
+    """把页面里的 JS 字面量洗成 JSON。
+
+    未登录页是纯 JSON；**登录后**页面里会混进 `new Map([])`、`undefined` 这类
+    JS 专有写法，直接 json.loads 会报 "Expecting value"。这里把它们换成等价的
+    JSON 记号。`new Map([...])` 带内容时无法无损转换，但那种情况几乎不出现，
+    真出现会解析失败并按原有逻辑回退到另一个入口。
+    """
+    text = raw.strip().rstrip(';')
+    for pattern, repl in _JS_NOISE:
+        text = pattern.sub(repl, text)
+    return text
+
+
 def is_heif(path: Path) -> bool:
     """按文件头判断是不是 HEIF/HEIC（ISO BMFF：第 4~12 字节含 ftyp + brand）。"""
     try:
@@ -446,10 +471,10 @@ class XHSParser(BaseParser):
             avatar: str
 
         class NoteData(Struct):
+            user: User                                    # 必填字段必须在可选之前
             type: str | None = None
             title: str | None = None
             desc: str | None = None
-            user: User
             time: int = 0
             lastUpdateTime: int = 0
             imageList: list[Image] = field(default_factory=list)  # 有水印
@@ -502,7 +527,7 @@ class XHSParser(BaseParser):
         if not matched:
             raise ParseException("小红书分享链接失效或内容已删除")
 
-        json_str = matched.group(1).replace("undefined", "null")
+        json_str = _js_to_json(matched.group(1))
         return json.loads(json_str)
 
 
