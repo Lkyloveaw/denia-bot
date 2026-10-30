@@ -285,6 +285,30 @@ def help_image():
     )
 
 
+def _protocol_path(path):
+    """把宿主机的图片路径换成协议端看得见的路径。
+
+    协议端常跑在 Docker 里：宿主机 `/opt/qqbot/snowluma/parser-cache/x.png`
+    在容器里是 `/app/data/parser-cache/x.png`。直接发宿主机路径，协议端 stat
+    不到就报 `ENOENT`，图片发不出去。
+
+    解析器早就处理了这件事（`Transport.mapped_path`），这里复用同一份配置：
+    缓存目录开了容器共享（`snowluma_container_cache`）就换算成容器内路径。
+    """
+    try:
+        from pathlib import PurePosixPath
+
+        from media_parser.core.config import PluginConfig
+
+        cfg = PluginConfig()
+        if not cfg.container_cache_dir:
+            return path
+        relative = Path(path).resolve().relative_to(cfg.cache_dir.resolve())
+        return PurePosixPath(cfg.container_cache_dir, *relative.parts).as_uri()
+    except Exception:  # noqa: BLE001 - 换算不了就按原路径发
+        return path
+
+
 async def is_help_command(event: Event) -> bool:
     return (
         gl.parse_gate_command(
@@ -313,9 +337,10 @@ async def handle_help() -> None:
         from nonebot.adapters.onebot.v11 import MessageSegment
         from nonebot.exception import FinishedException
 
-        logger.debug(f'[gate] 帮助菜单图片：{path}')
+        target = _protocol_path(path)
+        logger.debug(f'[gate] 帮助菜单图片：{path} -> {target}')
         try:
-            await help_cmd.finish(MessageSegment.image(path))
+            await help_cmd.finish(MessageSegment.image(target))
         except FinishedException:
             raise          # 正常结束，必须放行，否则两条路都发不出去
         except Exception as exc:  # noqa: BLE001 - 真的发送失败才回退文本
