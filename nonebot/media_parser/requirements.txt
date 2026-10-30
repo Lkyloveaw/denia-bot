@@ -8,5 +8,7 @@ yt-dlp[default]>=2025.12.8
 gallery-dl>=1.31.2
 json5>=0.9,<1
 pillow
+# 小红书原图大量是苹果 HEIC，QQ 显示不了，需要本地转 JPEG
+pillow-heif>=1.0,<2
 aiofiles
 qrcode

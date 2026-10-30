@@ -4,7 +4,8 @@
 
 1. **取无水印原图**：`imageList` 里的 `urlDefault` / `url` 是带水印的压缩图，
    真正的原图要从 URL 里抽出 token，再拼成 ``https://ci.xiaohongshu.com/<token>``。
-2. **原图失败回退**：原图链 404 / 返回非图片时退回压缩渲染图，宁可带水印也别发不出去。
+2. **HEIC 处理**：苹果手机拍的图原图是 HEIF，扩展名仍叫 .jpg，QQ 显示不了。
+   优先用 pillow-heif 本地转成 JPEG（保留原分辨率）；转不动才退回 CDN 压缩图。
 3. **兼容新版视频流**：新版接口 ``media.stream`` 的键是 ``EF4/EF5/EF6/EF7``，
    老版本只认 h264/h265，遇到新视频会直接解析失败。
 
@@ -155,6 +156,36 @@ def fix_image_suffix(path: Path) -> Path:
     return target
 
 
+def convert_heif_to_jpeg(path: Path) -> Path | None:
+    """把 HEIF/HEIC 转成同目录的 JPEG，返回新路径；转不了返回 None。
+
+    QQ 不认 HEIC，而苹果手机传的原图大量是这种格式。转码保留原始分辨率，
+    比退回 CDN 压缩图（WebP，尺寸被压过）清晰得多。
+    """
+    if not is_heif(path):
+        return None
+    try:
+        import pillow_heif
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        pillow_heif.register_heif_opener()
+        # 落到临时文件再替换：HEIC 原图的扩展名本来就是 .jpg，
+        # with_suffix(".jpg") 会指回源文件本身，直接保存等于边读边写。
+        target = path.with_suffix(".jpg")
+        temp = target.with_name(f"{target.stem}.heic-converting.jpg")
+        with Image.open(path) as img:
+            img.convert("RGB").save(temp, "JPEG", quality=95)
+        temp.replace(target)
+        if path != target:
+            path.unlink(missing_ok=True)
+        return fix_image_suffix(target)
+    except Exception as e:  # noqa: BLE001 - 转码失败就交回调用方走回退
+        logger.warning(f"HEIC 转 JPEG 失败（{path.name}）：{e}")
+        return None
+
+
 class XHSParser(BaseParser):
     # 平台信息
     platform: ClassVar[Platform] = Platform(name="xhs", display_name="小红书")
@@ -198,8 +229,8 @@ class XHSParser(BaseParser):
         """下载一张图，返回可用的文件路径。
 
         原图常是苹果手机拍的 HEIC —— QQ 显示不了，别看扩展名是 .jpg。
-        因此拿到文件后先验格式：HEIC 就退回 CDN 的压缩渲染图（那边必定是能被
-        显示的画面），再按实际格式把扩展名纠正过来。
+        处理顺序：原图下载 → 是 HEIF 就本地转 JPEG（保留原分辨率）
+                  → 转不动才退回 CDN 压缩图 → 最后纠正扩展名。
         """
         candidates = image_candidates(image)
         if not candidates:
@@ -208,14 +239,20 @@ class XHSParser(BaseParser):
         path = await self.downloader.download_img(
             candidates[0], headers=self.headers, proxy=self.proxy
         )
-        if is_heif(path) and len(candidates) > 1:
-            logger.info(f"小红书原图是 HEIC（{path.name}），改用压缩图")
-            try:
-                path = await self.downloader.download_img(
-                    candidates[1], headers=self.headers, proxy=self.proxy
-                )
-            except Exception as e:  # noqa: BLE001 - 压缩图也失败就交回原图
-                logger.warning(f"HEIC 回退压缩图失败，仍用原图：{e}")
+
+        if is_heif(path):
+            converted = await asyncio.to_thread(convert_heif_to_jpeg, path)
+            if converted is not None:
+                return converted
+            if len(candidates) > 1:
+                logger.info(f"HEIC 无法转换（{path.name}），改用压缩图")
+                try:
+                    path = await self.downloader.download_img(
+                        candidates[1], headers=self.headers, proxy=self.proxy
+                    )
+                except Exception as e:  # noqa: BLE001 - 压缩图也失败就交回原图
+                    logger.warning(f"HEIC 回退压缩图失败，仍用原图：{e}")
+
         return fix_image_suffix(path)
 
     async def _image_contents(self, images: list[Any]) -> list[Any]:
