@@ -21,6 +21,7 @@ from gate_logic import (  # noqa: E402
     BARE_HELP_HEADS,
     EXTRA_HELP_ROWS,
     GATE_HEADS,
+    HELP_GROUPS,
     HELP_HEADS,
     HELP_ROWS,
     UNLIMITED,
@@ -31,6 +32,8 @@ from gate_logic import (  # noqa: E402
     check,
     decide,
     describe,
+    grouped_help_rows,
+    help_footer,
     load_state,
     mentions_self,
     new_state,
@@ -526,6 +529,40 @@ def t_the_builtin_help_never_lands_in_the_registry():
         assert EXTRA_HELP_ROWS == [], f"自带指令不该进注册表：{EXTRA_HELP_ROWS}"
     finally:
         EXTRA_HELP_ROWS[:] = keep
+
+
+def t_help_groups_keep_every_row_once():
+    """分组不能吞掉任何一条：新插件注册的指令必须落到「其它」组里出现。"""
+    rows = all_help_rows() + [("天气 北京", "查天气"), ("某个新指令", "新来的")]
+    groups = grouped_help_rows(rows)
+    flat = [cmd for _, items in groups for cmd, _ in items]
+    assert sorted(flat) == sorted(cmd for cmd, _ in rows), "分组后有指令丢失或重复"
+    assert "其它" in [name for name, _ in groups], "未知指令应归到「其它」"
+
+
+def t_help_group_matches_prefixed_commands():
+    """`限流 默认 <次数>` 这类带参数的全称也要归到限流组。"""
+    groups = dict(grouped_help_rows(all_help_rows()))
+    limit_cmds = [cmd for cmd, _ in groups.get("限流", [])]
+    assert any(cmd.startswith("限流 默认") for cmd in limit_cmds), limit_cmds
+    assert all(cmd.startswith("限流") for cmd in limit_cmds), "限流组混进了别的指令"
+
+
+def t_help_group_order_follows_declaration():
+    """组顺序恒为 HELP_GROUPS 的声明顺序，与传入行的顺序无关。"""
+    groups = grouped_help_rows(list(reversed(all_help_rows())))
+    names = [name for name, _ in groups]
+    expected = [name for name, _ in HELP_GROUPS if name in names]
+    assert names == expected + (["其它"] if "其它" in names else []), names
+
+
+def t_help_footer_reports_current_behaviour():
+    """页脚要说真话：只@ 开与关的文案必须不同。"""
+    on = help_footer({"group_at_only": True, "caps": {"default": 20}})
+    off = help_footer({"group_at_only": False, "caps": {"default": UNLIMITED}})
+    assert "只回 @" in on, on
+    assert "叫名字" in off, off
+    assert "不限" in off, off
 
 
 if __name__ == "__main__":

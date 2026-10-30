@@ -28,6 +28,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -268,8 +269,20 @@ async def handle_gate_command(event: Event) -> None:
 
 
 def help_text() -> str:
-    """`.help` 那一屏：自带指令 + 各插件注册进来的（`模型 …` 就从这来）。"""
+    """`.help` 的纯文本版：渲染图片失败时兜底用。"""
     return gl.render_help(state(), gl.all_help_rows())
+
+
+def help_image():
+    """`.help` 的图片菜单；失败返回 None 由调用方回退文本。"""
+    import help_image as hi
+
+    return hi.render_help_image(
+        gl.grouped_help_rows(gl.all_help_rows()),
+        title='达妮娅 · 指令菜单',
+        subtitle='写成 .指令 或 /指令；私聊直接打词也行',
+        footer=gl.help_footer(state()),
+    )
 
 
 async def is_help_command(event: Event) -> bool:
@@ -287,4 +300,13 @@ help_cmd = on_message(rule=is_help_command, priority=80, block=True)
 
 @help_cmd.handle()
 async def handle_help() -> None:
+    # 图片菜单优先；渲染或发送失败就退回纯文本，绝不能不回
+    try:
+        from nonebot.adapters.onebot.v11 import MessageSegment
+
+        path = await asyncio.to_thread(help_image)
+        if path is not None:
+            await help_cmd.finish(MessageSegment.image(path))
+    except Exception:  # noqa: BLE001
+        logger.debug('[gate] 帮助菜单图片发送失败，回退文本', exc_info=True)
     await help_cmd.finish(help_text())

@@ -471,6 +471,47 @@ def all_help_rows() -> list[tuple[str, str]]:
     return list(HELP_ROWS) + list(EXTRA_HELP_ROWS)
 
 
+#: 图片菜单的分组。命令名与 `HELP_ROWS` / 注册表里的一致；
+#: 没被任何组接住的指令会落到「其它」组，避免新插件注册的指令在菜单里消失。
+HELP_GROUPS: list[tuple[str, tuple[str, ...]]] = [
+    ("对话", ("help", "status", "about", "whoami", "refresh", "reset", "undo", "profile")),
+    ("知识库", ("kb",)),
+    ("限流", ("限流 查看", "限流 默认", "限流 群上限", "限流 上限", "限流 清零", "限流 群内只@")),
+    ("模型", ("模型", "model", "模型 首选", "模型 次选")),
+    ("解析", ("开启解析", "关闭解析", "blogin", "登录b站")),
+    ("天气", ("天气", "天气预报")),
+    ("话题与记忆", ("群话题", "记忆")),
+]
+
+
+def grouped_help_rows(rows: Iterable[tuple[str, str]]) -> list[tuple[str, list[tuple[str, str]]]]:
+    """把扁平指令表按 `HELP_GROUPS` 分组，保持各组内原有顺序。
+
+    匹配规则：命令等于组内任一项，或以「组内项 + 空格」开头。
+    这样 `限流 默认 <次数>` 会归到限流组，而不需要把带参数的全称列一遍。
+    """
+    groups: dict[str, list[tuple[str, str]]] = {name: [] for name, _ in HELP_GROUPS}
+
+    def bucket(cmd: str) -> str:
+        for name, heads in HELP_GROUPS:
+            for head in heads:
+                if cmd == head or cmd.startswith(head + " "):
+                    return name
+        return "其它"
+
+    for cmd, desc in rows:
+        groups.setdefault(bucket(cmd), []).append((cmd, desc))
+
+    ordered = [name for name, _ in HELP_GROUPS] + ["其它"]
+    return [(name, groups[name]) for name in ordered if groups.get(name)]
+
+
+def help_footer(state: dict) -> str:
+    """菜单页脚：当前真实生效的配置。"""
+    mode = "群里只回 @ 我的消息" if state["group_at_only"] else "群里叫名字就会回"
+    return f"当前：{mode}｜每人每群每天 {fmt_cap(state['caps']['default'])} 次。"
+
+
 def render_help(state: dict, rows: Iterable[tuple[str, str]] = HELP_ROWS) -> str:
     """把指令表排成一屏，末尾带上闸门当前的真实行为 —— 列表要说真话。"""
     rows = list(rows)
