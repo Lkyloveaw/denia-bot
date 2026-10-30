@@ -1,0 +1,65 @@
+# =====================================================================
+#  MuiceBot 模型配置模板
+#  用法：cp models.yml.example models.yml，然后把 api_key 换成自己的
+#
+#  格式：<配置名>: { 配置项... }        ← 是字典，不是列表！
+#  写成一个 YAML 列表会报 AttributeError: 'list' object has no attribute 'items'
+#
+#  version: 0.1.0
+# =====================================================================
+
+# ---------- 0) 测试用：不调用真实模型 ----------
+# 逃生通道：中转站/网关出问题时把 echo-test 的 default 改成 true，
+# 机器人会原样回显请求内容 —— 至少能确认链路上机器人本身是活的。
+echo-test:
+  provider: _echo
+  default: false
+  template: Denia
+  template_mode: system
+  model_name: echo
+  max_tokens: 1024
+  temperature: 0.75
+
+# ---------- 1) 走 AxonHub 网关（可选） ----------
+# api_host 指向本机 AxonHub（默认 :8090），换模型/加渠道都在 AxonHub 面板里做，
+# 这里不用动。gpt-5.6-sol 这类思考模型 reasoning 会先吃掉一大截 token。
+relay:
+  provider: openai
+  default: true
+  template: Denia
+  template_mode: system
+  model_name: "gpt-5.6-sol"
+  api_key: "填入你的网关 Key"
+  api_host: "http://127.0.0.1:8090/v1"
+  max_tokens: 4096
+  temperature: 0.9               # 人格扮演建议稍微调高，0.85~1.0
+  top_p: 0.95
+  stream: true
+  function_call: false
+
+# ---------- 2) 直连服务商（备用，不走网关时把 default 挪过来）----------
+# DeepSeek:
+#   provider: openai
+#   default: false
+#   template: Denia
+#   template_mode: system
+#   model_name: deepseek-chat
+#   api_key: "sk-你的Key"
+#   api_host: https://api.deepseek.com
+#
+# 智谱 GLM:
+#   model_name: glm-4-flash
+#   api_host:   https://open.bigmodel.cn/api/paas/v4
+#
+# 月之暗面:
+#   model_name: moonshot-v1-8k
+#   api_host:   https://api.moonshot.cn/v1
+#
+# 阿里云百炼（也可让 provider 直接用 dashscope）:
+#   model_name: qwen-plus
+#   api_host:   https://dashscope.aliyuncs.com/compatible-mode/v1
+#
+# 本地 Ollama:
+#   provider: ollama
+#   model_name: qwen3:8b
+#   api_host: "http://127.0.0.1:11434"

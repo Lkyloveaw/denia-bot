@@ -1,0 +1,9 @@
+[project]
+name = "qqbot-muice"
+version = "0.1.0"
+description = "QQ 机器人：SnowLuma (OneBot v11) + NoneBot2 + MuiceBot"
+requires-python = ">=3.10"
+
+[tool.nonebot]
+plugins = ["muicebot"]
+plugin_dirs = ["plugins"]

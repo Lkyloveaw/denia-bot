@@ -1,0 +1,12 @@
+# 原插件依赖与 AstrBot 原本提供的依赖；安装到现有 NoneBot 虚拟环境。
+tqdm>=4.67.1,<5
+curl_cffi>=0.13.0,<0.15
+msgspec>=0.20.0,<1
+apilmoji>=0.3.0,<1
+bilibili-api-python>=17.4.1,<18
+yt-dlp[default]>=2025.12.8
+gallery-dl>=1.31.2
+json5>=0.9,<1
+pillow
+aiofiles
+qrcode

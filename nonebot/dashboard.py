@@ -1,0 +1,167 @@
+"""Local-network administrator console for bot data."""
+import hashlib
+import hmac
+import json
+import os
+import secrets
+import sqlite3
+import time
+from pathlib import Path
+from urllib.parse import urlsplit
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+import memory_logic as memory
+import group_topics_logic as topics
+import weather_service as weather
+import master_settings
+
+ROOT = Path(__file__).resolve().parent
+AUTH_FILE = ROOT / 'data' / 'dashboard-auth.json'
+sessions = {}
+attempts = {}
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+def set_password(password, must_change=False):
+    if not 12 <= len(password) <= 256: raise ValueError('密码长度须为 12 到 256 位')
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1).hex()
+    AUTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp = AUTH_FILE.with_name(AUTH_FILE.name + '.tmp')
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f: json.dump({'salt':salt.hex(),'hash':digest,'must_change':must_change}, f)
+    os.replace(temp, AUTH_FILE)
+
+def password_matches(password, saved):
+    got = hashlib.scrypt(password.encode(),salt=bytes.fromhex(saved['salt']),n=16384,r=8,p=1).hex()
+    return hmac.compare_digest(got,saved['hash'])
+
+def authorized(req, allow_change=False):
+    token = req.cookies.get('admin_session', '')
+    expiry = sessions.get(token, 0)
+    if not expiry or expiry < time.time():
+        sessions.pop(token, None)
+        raise HTTPException(401, '请登录')
+    try:
+        must_change = json.loads(AUTH_FILE.read_text(encoding='utf-8')).get('must_change', False)
+    except (OSError, ValueError):
+        raise HTTPException(503, '无法读取管理员配置')
+    if must_change and not allow_change: raise HTTPException(403, '请先修改初始密码')
+    return token
+
+def mutate(req, allow_change=False):
+    token = authorized(req, allow_change=allow_change)
+    origin = req.headers.get('origin','')
+    if req.headers.get('x-csrf-token') != token or not origin or urlsplit(origin).netloc != req.headers.get('host'):
+        raise HTTPException(403, '请求来源无效')
+
+@app.get('/', response_class=HTMLResponse)
+def index():
+    return (ROOT / 'dashboard.html').read_text(encoding='utf-8')
+
+@app.post('/api/login')
+async def login(req: Request):
+    ip = req.client.host
+    recent = [t for t in attempts.get(ip,[]) if t > time.time()-300]
+    attempts[ip] = recent
+    if len(recent) >= 8: raise HTTPException(429, '尝试次数过多，请稍后再试')
+    body = await req.json()
+    try:
+        saved = json.loads(AUTH_FILE.read_text(encoding='utf-8'))
+        valid = password_matches(str(body.get('password',''))[:256], saved)
+    except (OSError, ValueError, KeyError): valid = False
+    if not valid:
+        recent.append(time.time())
+        raise HTTPException(401, '密码错误或后台尚未配置')
+    attempts.pop(ip,None)
+    token = secrets.token_urlsafe(32)
+    sessions[token] = time.time()+8*3600
+    response = JSONResponse({'csrf':token, 'must_change':bool(saved.get('must_change', False))})
+    response.set_cookie('admin_session', token, httponly=True, samesite='strict', max_age=8*3600)
+    return response
+
+@app.post('/api/password')
+async def change_password(req: Request):
+    mutate(req, allow_change=True)
+    body = await req.json()
+    password = body.get('password')
+    if not isinstance(password, str) or not 12 <= len(password) <= 256:
+        raise HTTPException(400, '密码长度须为 12 到 256 位')
+    saved = json.loads(AUTH_FILE.read_text(encoding='utf-8'))
+    if password_matches(password, saved): raise HTTPException(400, '新密码不能与原密码相同')
+    set_password(password)
+    sessions.clear()
+    (AUTH_FILE.parent / 'dashboard-initial-password').unlink(missing_ok=True)
+    response = JSONResponse({'ok':True})
+    response.delete_cookie('admin_session')
+    return response
+
+@app.get('/api/state')
+def state(req: Request):
+    authorized(req)
+    with memory._connect(memory.DEFAULT_PATH) as c:
+        users = [r[0] for r in c.execute('SELECT user_id FROM memories UNION SELECT user_id FROM memory_candidates UNION SELECT user_id FROM memory_preferences ORDER BY user_id')]
+    with topics._connect(topics.DEFAULT_PATH) as c:
+        groups = [dict(r) for r in c.execute('SELECT group_id,enabled FROM topic_groups ORDER BY group_id')]
+    cfg = weather.config()
+    return {'users':users,'groups':groups,'weather':{'host':cfg.get('host',''),'configured':bool(cfg.get('key'))},'pushes':weather.list_pushes()}
+
+@app.get('/api/user/{uid}')
+def user(uid: str, req: Request):
+    authorized(req)
+    if not uid.isdigit(): raise HTTPException(400)
+    return {'memories':memory.list_memories(memory.DEFAULT_PATH,uid),'candidates':memory.list_candidates(memory.DEFAULT_PATH,uid),'enabled':memory.is_enabled(memory.DEFAULT_PATH,uid)}
+
+@app.get('/api/master-aware')
+def master_aware_settings(req: Request):
+    authorized(req)
+    try: return master_settings.load()
+    except (OSError, ValueError): raise HTTPException(503, '主人识别配置无法读取')
+
+@app.post('/api/master-aware')
+async def change_master_aware(req: Request):
+    mutate(req)
+    body = await req.json()
+    try: return master_settings.save(body)
+    except ValueError as e: raise HTTPException(400,str(e))
+
+@app.get('/api/group/{gid}')
+def group(gid: str, req: Request):
+    authorized(req)
+    if not gid.isdigit(): raise HTTPException(400)
+    return {'enabled':topics.enabled(topics.DEFAULT_PATH,gid),'topics':topics.top(topics.DEFAULT_PATH,gid,limit=20), 'speakers':topics.speaker_top(topics.DEFAULT_PATH,gid,limit=20)}
+
+@app.post('/api/topic')
+async def topic(req: Request):
+    mutate(req); b=await req.json(); gid=str(b.get('group','')); action=b.get('action')
+    if not gid.isdigit() or int(gid)<=0 or action not in ('开','关','清除'): raise HTTPException(400)
+    if action=='清除': topics.clear(topics.DEFAULT_PATH,gid)
+    else: topics.set_enabled(topics.DEFAULT_PATH,gid,action=='开')
+    return {'ok':True}
+
+@app.post('/api/memory')
+async def change_memory(req: Request):
+    mutate(req); b=await req.json(); uid=str(b.get('user','')); action=b.get('action'); target=str(b.get('id',''))
+    if not uid.isdigit(): raise HTTPException(400)
+    if action in ('开启','关闭'): memory.set_enabled(memory.DEFAULT_PATH,uid,action=='开启'); ok=True
+    elif action=='忘记': ok=memory.forget(memory.DEFAULT_PATH,uid,target)
+    elif action=='纠正': ok=memory.correct(memory.DEFAULT_PATH,uid,target,str(b.get('text','')))
+    elif action in ('accept','replace','discard'): ok=memory.resolve_candidate(memory.DEFAULT_PATH,uid,target,action)
+    else: raise HTTPException(400)
+    if not ok: raise HTTPException(400, '操作失败，请检查内容或编号')
+    return {'ok':True}
+
+@app.post('/api/weather')
+async def set_weather(req: Request):
+    mutate(req); b=await req.json()
+    try: weather.save_config(str(b.get('host','')),str(b.get('key','')))
+    except ValueError as e: raise HTTPException(400,str(e))
+    return {'ok':True}
+
+@app.post('/api/push')
+async def push(req: Request):
+    mutate(req); b=await req.json()
+    try:
+        if b.get('action')=='delete': weather.delete_push(int(b['id']))
+        else: weather.add_push(weather.PATH,str(b.get('kind','')),str(b.get('target','')),str(b.get('city','')),str(b.get('clock','')))
+    except (ValueError,KeyError): raise HTTPException(400,'推送配置无效')
+    return {'ok':True}
