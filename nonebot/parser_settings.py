@@ -131,6 +131,22 @@ def clear_events() -> dict:
     return events()
 
 
+def token_summary(days: int = 7) -> dict:
+    """Token 消耗概览与模型排名。账本由 plugins/token_usage.py 写入。"""
+    import token_logic
+
+    ledger = token_logic.TokenLedger(ROOT / 'data' / 'token-usage.json')
+    return ledger.summary(days=max(1, min(int(days), 90)))
+
+
+def clear_tokens() -> dict:
+    import token_logic
+
+    ledger = token_logic.TokenLedger(ROOT / 'data' / 'token-usage.json')
+    ledger.clear()
+    return ledger.summary()
+
+
 def validate(value, spec, label):
     kind = spec.get('type')
     if kind == 'bool':

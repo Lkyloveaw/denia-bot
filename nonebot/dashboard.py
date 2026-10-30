@@ -266,6 +266,18 @@ async def clear_parser_events(req: Request):
     try: return parser_settings.clear_events()
     except (OSError, ValueError): raise HTTPException(503, '解析日志无法清理')
 
+@app.get('/api/token')
+def token_usage(req: Request, days: int = 7):
+    authorized(req)
+    try: return parser_settings.token_summary(days=days)
+    except (OSError, ValueError): raise HTTPException(503, 'Token 统计无法读取')
+
+@app.post('/api/token/clear')
+async def clear_token_usage(req: Request):
+    mutate(req)
+    try: return parser_settings.clear_tokens()
+    except (OSError, ValueError): raise HTTPException(503, 'Token 统计无法清理')
+
 @app.get('/api/group/{gid}')
 def group(gid: str, req: Request):
     authorized(req)
