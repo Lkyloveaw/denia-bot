@@ -19,7 +19,6 @@ from bot_monitor import Monitor, Restart, RestartController, WindowsRestart  # n
 
 ROOT = Path(__file__).resolve().parent
 AUTH_FILE = ROOT / 'data' / 'dashboard-auth.json'
-sessions = {}
 attempts = {}
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 monitor = Monitor()
@@ -39,6 +38,72 @@ def set_password(password, must_change=False):
 def password_matches(password, saved):
     got = hashlib.scrypt(password.encode(),salt=bytes.fromhex(saved['salt']),n=16384,r=8,p=1).hex()
     return hmac.compare_digest(got,saved['hash'])
+
+SESSION_MAX_AGE = 8 * 3600
+"""会话有效期（秒）。"""
+
+
+def session_store_path() -> Path:
+    return ROOT / 'data' / 'dashboard-sessions.json'
+
+
+def load_sessions() -> dict:
+    """从磁盘恢复会话。
+
+    原来会话只存在内存里，面板一重启全员掉登录 —— 光是配置变更重启就把人踢出去。
+    现在落盘，重启后仍然有效。
+    """
+    try:
+        raw = json.loads(session_store_path().read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+    now = time.time()
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): float(v) for k, v in raw.items() if isinstance(v, (int, float)) and v > now}
+
+
+def save_sessions(data: dict) -> None:
+    """原子写入会话文件；失败不影响登录本身。"""
+    path = session_store_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(path.name + '.tmp')
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        os.replace(temp, path)
+    except OSError:
+        pass
+
+
+sessions = load_sessions()
+
+
+def prune_sessions() -> dict:
+    """清掉过期会话并返回有效会话。"""
+    now = time.time()
+    alive = {k: v for k, v in sessions.items() if v > now}
+    if len(alive) != len(sessions):
+        sessions.clear()
+        sessions.update(alive)
+        save_sessions(sessions)
+    return alive
+
+
+def issue_session() -> str:
+    """新建一个会话并落盘，返回 token。"""
+    token = secrets.token_urlsafe(32)
+    prune_sessions()
+    sessions[token] = time.time() + SESSION_MAX_AGE
+    save_sessions(sessions)
+    return token
+
+
+def drop_session(token: str) -> None:
+    sessions.pop(token, None)
+    save_sessions(sessions)
+
 
 def authorized(req, allow_change=False):
     token = req.cookies.get('admin_session', '')
@@ -78,11 +143,21 @@ async def login(req: Request):
         recent.append(time.time())
         raise HTTPException(401, '密码错误或后台尚未配置')
     attempts.pop(ip,None)
-    token = secrets.token_urlsafe(32)
-    sessions[token] = time.time()+8*3600
+    token = issue_session()
     response = JSONResponse({'csrf':token, 'must_change':bool(saved.get('must_change', False))})
-    response.set_cookie('admin_session', token, httponly=True, samesite='strict', max_age=8*3600)
+    # 显式给 Path=/，任何子路径都带上；SameSite=Lax 允许从地址栏直接打开时保留会话
+    response.set_cookie('admin_session', token, httponly=True, samesite='lax', max_age=SESSION_MAX_AGE, path='/')
     return response
+
+@app.get('/api/session')
+def session_info(req: Request):
+    """页面加载时问一句「我还登录着吗」，省得每次刷新都重新输密码。"""
+    token = authorized(req)
+    try:
+        must_change = json.loads(AUTH_FILE.read_text(encoding='utf-8')).get('must_change', False)
+    except (OSError, ValueError):
+        must_change = False
+    return {'csrf': token, 'must_change': must_change}
 
 @app.post('/api/password')
 async def change_password(req: Request):
@@ -95,9 +170,18 @@ async def change_password(req: Request):
     if password_matches(password, saved): raise HTTPException(400, '新密码不能与原密码相同')
     set_password(password)
     sessions.clear()
+    save_sessions(sessions)       # 改密码一律让所有设备重新登录
     (AUTH_FILE.parent / 'dashboard-initial-password').unlink(missing_ok=True)
     response = JSONResponse({'ok':True})
-    response.delete_cookie('admin_session')
+    response.delete_cookie('admin_session', path='/')
+    return response
+
+@app.post('/api/logout')
+async def logout(req: Request):
+    token = req.cookies.get('admin_session', '')
+    if token: drop_session(token)
+    response = JSONResponse({'ok':True})
+    response.delete_cookie('admin_session', path='/')
     return response
 
 @app.get('/api/state')
