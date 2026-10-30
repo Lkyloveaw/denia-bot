@@ -14,12 +14,17 @@ import memory_logic as memory
 import group_topics_logic as topics
 import weather_service as weather
 import master_settings
+import parser_settings
+from bot_monitor import Monitor, RestartController, WindowsRestart
 
 ROOT = Path(__file__).resolve().parent
 AUTH_FILE = ROOT / 'data' / 'dashboard-auth.json'
 sessions = {}
 attempts = {}
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+monitor = Monitor()
+restart_worker = WindowsRestart(monitor)
+restart_controller = RestartController(restart_worker)
 
 def set_password(password, must_change=False):
     if not 12 <= len(password) <= 256: raise ValueError('密码长度须为 12 到 256 位')
@@ -105,6 +110,29 @@ def state(req: Request):
     cfg = weather.config()
     return {'users':users,'groups':groups,'weather':{'host':cfg.get('host',''),'configured':bool(cfg.get('key'))},'pushes':weather.list_pushes()}
 
+@app.get('/api/bot-status')
+async def bot_status(req: Request):
+    authorized(req)
+    status = await monitor.status()
+    if restart_controller.running and restart_controller.error:
+        health = await monitor.bot_health()
+        new_token = restart_worker.expected_token and health.get('start_token') == restart_worker.expected_token
+        new_pid = health.get('pid') and (
+            (restart_worker.previous_pid and health.get('pid') != restart_worker.previous_pid)
+            or (restart_worker.previous_pid is None and restart_worker.previous_state in ('offline', 'unknown'))
+        )
+        if health.get('state') == 'ready' and (new_token or new_pid):
+            restart_controller.observe_ready()
+    status['restart'] = {'running':restart_controller.running, 'error':restart_controller.error, 'available':restart_worker.available}
+    return status
+
+@app.post('/api/bot-restart', status_code=202)
+async def bot_restart(req: Request):
+    mutate(req)
+    if not restart_worker.available: raise HTTPException(503, '当前环境不支持自动重启')
+    if not await restart_controller.start(): raise HTTPException(409, '机器人正在重启，请等待启动完成')
+    return {'ok':True}
+
 @app.get('/api/user/{uid}')
 def user(uid: str, req: Request):
     authorized(req)
@@ -123,6 +151,20 @@ async def change_master_aware(req: Request):
     body = await req.json()
     try: return master_settings.save(body)
     except ValueError as e: raise HTTPException(400,str(e))
+
+@app.get('/api/parser')
+def parser_config(req: Request):
+    authorized(req)
+    try: return parser_settings.public()
+    except (OSError, ValueError, KeyError): raise HTTPException(503, '解析器配置无法读取')
+
+@app.post('/api/parser')
+async def set_parser_config(req: Request):
+    mutate(req)
+    try: return parser_settings.save(await req.json())
+    except FileExistsError as e: raise HTTPException(409, str(e))
+    except (ValueError, TypeError) as e: raise HTTPException(400, str(e))
+    except (OSError, sqlite3.Error): raise HTTPException(503, '解析器配置无法保存，请稍后重试')
 
 @app.get('/api/group/{gid}')
 def group(gid: str, req: Request):

@@ -67,6 +67,32 @@ class DashboardTest(unittest.TestCase):
                 data = client.get('/api/parser').json()
                 self.assertEqual(client.post('/api/parser', json={'version':data['version'],'clear_secrets':['bilibili.cookies']}, headers=headers).status_code, 200)
                 self.assertFalse(client.get('/api/parser').json()['secrets']['bilibili.cookies'])
+    def test_parser_payload_exposes_baseline_and_platform_summary(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(parser_settings, 'PATH', Path(tmp)/'parser.json'):
+            d.AUTH_FILE = Path(tmp)/'auth'
+            d.set_password('a-strong-test-password')
+            with TestClient(d.app) as client:
+                login = client.post('/api/login', json={'password':'a-strong-test-password'})
+                headers = {'Origin':'http://testserver','X-CSRF-Token':login.json()['csrf']}
+                data = client.get('/api/parser').json()
+                total = len(data['platforms'])
+                # 基线用于前端判断「改没改过」，必须覆盖每个平台
+                self.assertEqual(set(data['baseline']), set(data['platforms']))
+                self.assertIn('enable', data['baseline']['bilibili'])
+                self.assertEqual(data['summary']['total'], total)
+                self.assertEqual(data['summary']['enabled'], len(data['summary']['names']))
+                # 关掉一个平台后，总览要跟着变
+                target = data['summary']['names'][0]
+                update = {'version':data['version'], 'platforms':{target:{'enable':False}}}
+                self.assertEqual(client.post('/api/parser', json=update, headers=headers).status_code, 200)
+                after = client.get('/api/parser').json()
+                self.assertEqual(after['summary']['enabled'], data['summary']['enabled'] - 1)
+                self.assertNotIn(target, after['summary']['names'])
+                self.assertEqual(after['summary']['total'], total)
+    def test_summary_counts_only_explicit_true(self):
+        platforms = {'a':{'enable':True}, 'b':{'enable':False}, 'c':{}}
+        result = parser_settings.summary(platforms, baseline={})
+        self.assertEqual(result, {'total':3, 'enabled':1, 'names':['a']})
     def test_master_settings_require_login_and_csrf(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(master_settings,'PATH',Path(tmp)/'settings.json'):
             d.AUTH_FILE=Path(tmp)/'auth'

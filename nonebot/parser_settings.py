@@ -49,7 +49,38 @@ def public():
             if key in entry:
                 secrets[f'{name}.{key}'] = bool(entry[key])
                 entry[key] = ''
-    return {'version': revision, 'general': data, 'platforms': platforms, 'schema': definitions, 'secrets': secrets}
+    baseline = defaults()
+    return {
+        'version': revision,
+        'general': data,
+        'platforms': platforms,
+        'baseline': baseline,
+        'summary': summary(platforms, baseline),
+        'schema': definitions,
+        'secrets': secrets,
+    }
+
+
+def defaults():
+    """平台模板里每个字段的默认值，用来判断「有没有改动过」。
+
+    `parsers_template` 是列表，每项带 `__template_key`；只取模板定义，不读用户配置。
+    """
+    result = {}
+    for name, spec in schema()['parsers_template']['templates'].items():
+        result[name] = {key: item.get('default') for key, item in spec.get('items', {}).items()}
+    return result
+
+
+def summary(platforms, baseline=None):
+    """给前端用的平台开关总览：开了几个、一共几个、哪些开着。
+
+    只看 `enable` 一个字段，不碰其它设置，所以调用方可以只读不写。
+    """
+    baseline = baseline if baseline is not None else defaults()
+    total = len(platforms)
+    enabled = [name for name, entry in platforms.items() if entry.get('enable') is True]
+    return {'total': total, 'enabled': len(enabled), 'names': sorted(enabled)}
 
 
 def validate(value, spec, label):
