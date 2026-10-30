@@ -7,8 +7,12 @@ tools/*pass*.txt
 tools/*.pem
 tools/*.key
 tools/atrust-backup/
+# 面板登录 SnowLuma WebUI 用的密码；显式列出，别只靠上面的通配规则
+tools/snowluma-webui-pass.txt
 axonhub/config.yml
 axonhub/axonhub.db*
+# 解析器登录凭证（扫码或 Cookie 换来的，等同账号凭据）
+nonebot/data/media_parser/cookies/
 knowledge/本地私有/
 # 协议端登录二维码截图（含登录凭据，绝不能外传）
 扫码登录.png
