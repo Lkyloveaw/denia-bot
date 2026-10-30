@@ -1,5 +1,22 @@
+"""小红书解析器。
+
+与上游版本相比，这里整合了网页端下载脚本的三个关键做法：
+
+1. **取无水印原图**：`imageList` 里的 `urlDefault` / `url` 是带水印的压缩图，
+   真正的原图要从 URL 里抽出 token，再拼成 ``https://ci.xiaohongshu.com/<token>``。
+2. **原图失败回退**：原图链 404 / 返回非图片时退回压缩渲染图，宁可带水印也别发不出去。
+3. **兼容新版视频流**：新版接口 ``media.stream`` 的键是 ``EF4/EF5/EF6/EF7``，
+   老版本只认 h264/h265，遇到新视频会直接解析失败。
+
+注意：本文件**不能**加 ``from __future__ import annotations``。下面几个 msgspec
+Struct 定义在函数体内，注解被延迟成字符串后，msgspec 解析类型时会找不到这些
+局部名字（先报 `name 'User' is not defined`，再回退到另一个分支一起失败）。
+"""
+
+import asyncio
 import json
 import re
+from pathlib import Path
 from typing import Any, ClassVar
 
 from msgspec import Struct, convert, field
@@ -8,8 +25,134 @@ from nonebot import logger
 
 from ..config import PluginConfig
 from ..cookie import CookieJar
+from ..data import ImageContent
 from ..download import Downloader
 from .base import BaseParser, ParseException, Platform, handle
+
+CI_HOST = "https://ci.xiaohongshu.com"
+"""无水印原图前缀：ci.xiaohongshu.com/<token>"""
+
+_TOKEN_IN_PATH = re.compile(r"/\d+/[a-f0-9]+/([^!]+)")
+"""原图 token 在 CDN 路径里的位置：/<数字>/<hash>/<token>"""
+
+IMAGE_SUFFIX = {"image/jpeg": ".jpg", "image/png": ".png",
+                "image/webp": ".webp", "image/gif": ".gif"}
+"""按响应 MIME 修正扩展名；HEIC 不在其中 —— 那是苹果私有格式，QQ 显示不了。"""
+
+HEIF_BRANDS = (b"heic", b"heix", b"mif1", b"heim", b"heis", b"hevc", b"hevx")
+"""HEIF/HEIC 的 ftyp brand。苹果手机传的原图常是这种格式，QQ 显示不了。"""
+
+
+def extract_image_token(url: str | None) -> str | None:
+    """从 CDN 图片 URL 里取出原图 token。
+
+    形如 ``sns-webpic-qc.xhscdn.com/202610301929/<hash>/notes_pre_post/1040g3...``，
+    取 ``notes_pre_post/1040g3...`` 这一段。
+    """
+    if not url:
+        return None
+    try:
+        path = url.split("?", 1)[0]
+        matched = _TOKEN_IN_PATH.search(path)
+        if matched and len(matched.group(1)) >= 8:
+            return matched.group(1)
+        parts = url.split("/")
+        if len(parts) >= 6:
+            raw = "/".join(parts[5:]).split("!")[0]
+            if len(raw) >= 8:
+                return raw
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+def build_origin_url(token: str) -> str:
+    """原图地址。"""
+    return f"{CI_HOST}/{token}"
+
+
+def pick_stream_url(stream: dict[str, Any] | None) -> str | None:
+    """从视频流里挑一条：优先分辨率高的，同分辨率优先码率高的。
+
+    键名不固定（老版 h264/h265，新版 EF4~EF7），因此不看键、只看数组内容。
+    """
+    if not isinstance(stream, dict):
+        return None
+    best: tuple[int, int, str] | None = None
+    for value in stream.values():
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("masterUrl") or next(
+                (u for u in item.get("backupUrls") or [] if u), None)
+            if not url:
+                continue
+            score = (int(item.get("height") or 0), int(item.get("videoBitrate") or 0))
+            if best is None or score > best[:2]:
+                best = (score[0], score[1], url.replace("http://", "https://", 1))
+    return best[2] if best else None
+
+
+def image_candidates(image: Struct) -> list[str]:
+    """一张图的所有可尝试地址：原图优先，压缩图兜底。"""
+    raw = (
+        getattr(image, "urlDefault", None)
+        or getattr(image, "url", None)
+        or getattr(image, "urlSizeLarge", None)
+        or ""
+    )
+    token = extract_image_token(raw)
+    urls: list[str] = []
+    if token:
+        urls.append(build_origin_url(token))
+    if raw and raw not in urls:
+        urls.append(raw.replace("http://", "https://", 1))
+    return urls
+
+
+def is_heif(path: Path) -> bool:
+    """按文件头判断是不是 HEIF/HEIC（ISO BMFF：第 4~12 字节含 ftyp + brand）。"""
+    try:
+        with path.open("rb") as fp:
+            head = fp.read(16)
+    except OSError:
+        return False
+    return len(head) >= 12 and head[4:8] == b"ftyp" and head[8:12] in HEIF_BRANDS
+
+
+def fix_image_suffix(path: Path) -> Path:
+    """按文件头把扩展名改成真实格式。
+
+    下载器按 URL 后缀命名，CDN 的图片一律落成 ``.jpg``，实际可能是 WebP/PNG。
+    文件名和内容对不上时，有些客户端会按扩展名强行解码然后失败。
+    """
+    try:
+        with path.open("rb") as fp:
+            head = fp.read(16)
+    except OSError:
+        return path
+
+    if head[:3] == b"\xff\xd8\xff":
+        suffix = ".jpg"
+    elif head[:8] == b"\x89PNG\r\n\x1a\n":
+        suffix = ".png"
+    elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        suffix = ".webp"
+    elif head[:6] in (b"GIF87a", b"GIF89a"):
+        suffix = ".gif"
+    else:
+        return path
+
+    if path.suffix.lower() == suffix:
+        return path
+    target = path.with_suffix(suffix)
+    try:
+        path.rename(target)
+    except OSError:
+        return path
+    return target
 
 
 class XHSParser(BaseParser):
@@ -42,6 +185,55 @@ class XHSParser(BaseParser):
             self.headers["cookie"] = self.cookiejar.cookies_str
             self.ios_headers["cookie"] = self.cookiejar.cookies_str
 
+    def _pick_image_urls(self, images: list[Any]) -> list[str]:
+        """每张图取原图地址，拿不到就取压缩图。"""
+        urls: list[str] = []
+        for image in images:
+            candidates = image_candidates(image)
+            if candidates:
+                urls.append(candidates[0])
+        return urls
+
+    async def _download_image(self, image: Any):
+        """下载一张图，返回可用的文件路径。
+
+        原图常是苹果手机拍的 HEIC —— QQ 显示不了，别看扩展名是 .jpg。
+        因此拿到文件后先验格式：HEIC 就退回 CDN 的压缩渲染图（那边必定是能被
+        显示的画面），再按实际格式把扩展名纠正过来。
+        """
+        candidates = image_candidates(image)
+        if not candidates:
+            raise ParseException("图片地址为空")
+
+        path = await self.downloader.download_img(
+            candidates[0], headers=self.headers, proxy=self.proxy
+        )
+        if is_heif(path) and len(candidates) > 1:
+            logger.info(f"小红书原图是 HEIC（{path.name}），改用压缩图")
+            try:
+                path = await self.downloader.download_img(
+                    candidates[1], headers=self.headers, proxy=self.proxy
+                )
+            except Exception as e:  # noqa: BLE001 - 压缩图也失败就交回原图
+                logger.warning(f"HEIC 回退压缩图失败，仍用原图：{e}")
+        return fix_image_suffix(path)
+
+    async def _image_contents(self, images: list[Any]) -> list[Any]:
+        """把图片列表转成图片内容，每张走「原图优先 + HEIC 回退」。"""
+        contents = []
+        for image in images:
+            task = self._download_image(image)
+            contents.append(ImageContent(asyncio.ensure_future(task)))
+        return contents
+
+    async def _image_contents(self, images: list[Any]) -> list[Any]:
+        """把图片列表转成图片内容，每张走「原图优先 + HEIC 回退」。"""
+        contents = []
+        for image in images:
+            task = self._download_image(image)
+            contents.append(ImageContent(asyncio.ensure_future(task)))
+        return contents
+
     @handle("xhslink.com", r"xhslink\.com/[A-Za-z0-9._?%&+=/#@-]+")
     @handle("xhslink.cn", r"xhslink\.cn/[A-Za-z0-9._?%&+=/#@-]+")
     async def _parse_short_link(self, searched: re.Match[str]):
@@ -51,7 +243,7 @@ class XHSParser(BaseParser):
     # https://www.xiaohongshu.com/discovery/item/68e8e3fa00000000030342ec?app_platform=android&ignoreEngage=true&app_version=9.6.0&share_from_user_hidden=true&xsec_source=app_share&type=normal&xsec_token=CBW9rwIV2qhcCD-JsQAOSHd2tTW9jXAtzqlgVXp6c52Sw%3D&author_share=1&xhsshare=QQ&shareRedId=ODs3RUk5ND42NzUyOTgwNjY3OTo8S0tK&apptime=1761372823&share_id=3b61945239ac403db86bea84a4f15124&share_channel=qq
     @handle(
         "xiaohongshu.com",
-        r"(explore|discovery/item)/(?P<query>(?P<xhs_id>[0-9a-zA-Z]+)(?:\?[A-Za-z0-9._%&+=/#@-]+)?)",
+        r"(explore|discovery/item|note)/(?P<query>(?P<xhs_id>[0-9a-zA-Z]+)(?:\?[A-Za-z0-9._%&+=/#@-]+)?)",
     )
     async def _parse_common(self, searched: re.Match[str]):
         xhs_domain = "https://www.xiaohongshu.com"
@@ -84,6 +276,9 @@ class XHSParser(BaseParser):
 
         class Image(Struct):
             urlDefault: str
+            url: str | None = None
+            urlSizeLarge: str | None = None
+            stream: dict[str, Any] | None = None
 
         class User(Struct):
             nickname: str
@@ -120,13 +315,15 @@ class XHSParser(BaseParser):
         contents = []
         # 添加视频内容
         if video_url := note_detail.video_url:
-            # 使用第一张图片作为封面
-            cover_url = note_detail.image_urls[0] if note_detail.image_urls else None
-            contents.append(self.create_video_content(video_url, cover_url))
+            # 使用第一张图片的**原图**作为封面（压缩图做封面糊得厉害）
+            cover_url = self._pick_image_urls(note_detail.imageList[:1])
+            contents.append(
+                self.create_video_content(video_url, cover_url[0] if cover_url else None)
+            )
 
         # 添加图片内容
-        elif image_urls := note_detail.image_urls:
-            contents.extend(self.create_image_contents(image_urls))
+        elif note_detail.imageList:
+            contents.extend(await self._image_contents(note_detail.imageList))
 
         # 构建作者
         author = self.create_author(note_detail.nickname, note_detail.avatar_url)
@@ -158,19 +355,20 @@ class XHSParser(BaseParser):
         class Image(Struct):
             url: str
             urlSizeLarge: str | None = None
+            stream: dict[str, Any] | None = None
 
         class User(Struct):
             nickName: str
             avatar: str
 
         class NoteData(Struct):
-            type: str
-            title: str
-            desc: str
+            type: str | None = None
+            title: str | None = None
+            desc: str | None = None
             user: User
-            time: int
-            lastUpdateTime: int
-            imageList: list[Image] = []  # 有水印
+            time: int = 0
+            lastUpdateTime: int = 0
+            imageList: list[Image] = field(default_factory=list)  # 有水印
             video: Video | None = None
 
             @property
@@ -186,7 +384,7 @@ class XHSParser(BaseParser):
         class NormalNotePreloadData(Struct):
             title: str
             desc: str
-            imagesList: list[Image] = []  # 无水印, 但只有一只，用于视频封面
+            imagesList: list[Image] = field(default_factory=list)
 
             @property
             def image_urls(self) -> list[str]:
@@ -198,24 +396,25 @@ class XHSParser(BaseParser):
         if video_url := note_data.video_url:
             if preload_data:
                 preload_data = convert(preload_data, type=NormalNotePreloadData)
-                img_urls = preload_data.image_urls
+                img_urls = self._pick_image_urls(preload_data.imagesList)
             else:
-                img_urls = note_data.image_urls
-            contents.append(self.create_video_content(video_url, img_urls[0]))
-        elif img_urls := note_data.image_urls:
-            contents.extend(self.create_image_contents(img_urls))
+                img_urls = self._pick_image_urls(note_data.imageList)
+            cover = img_urls[0] if img_urls else None
+            contents.append(self.create_video_content(video_url, cover))
+        elif note_data.imageList:
+            contents.extend(await self._image_contents(note_data.imageList))
 
         return self.result(
-            title=note_data.title,
+            title=note_data.title or "",
             author=self.create_author(note_data.user.nickName, note_data.user.avatar),
             contents=contents,
-            text=note_data.desc,
-            timestamp=note_data.time // 1000,
+            text=note_data.desc or "",
+            timestamp=(note_data.time or 0) // 1000,
         )
 
     def _extract_initial_state_json(self, html: str) -> dict[str, Any]:
         pattern = r"window\.__INITIAL_STATE__=(.*?)</script>"
-        matched = re.search(pattern, html)
+        matched = re.search(pattern, html, re.S)
         if not matched:
             raise ParseException("小红书分享链接失效或内容已删除")
 
@@ -224,6 +423,12 @@ class XHSParser(BaseParser):
 
 
 class Stream(Struct):
+    """视频流。
+
+    老接口用 h264/h265/av1/h266，新接口用 EF4~EF7，这里全都收，
+    否则新版视频会解析失败。
+    """
+
     h264: list[dict[str, Any]] | None = None
     h265: list[dict[str, Any]] | None = None
     av1: list[dict[str, Any]] | None = None
@@ -231,7 +436,7 @@ class Stream(Struct):
 
 
 class Media(Struct):
-    stream: Stream
+    stream: dict[str, Any]
 
 
 class Video(Struct):
@@ -239,15 +444,5 @@ class Video(Struct):
 
     @property
     def video_url(self) -> str | None:
-        stream = self.media.stream
-
-        # h264 有水印，h265 无水印
-        if stream.h265:
-            return stream.h265[0]["masterUrl"]
-        elif stream.h264:
-            return stream.h264[0]["masterUrl"]
-        elif stream.av1:
-            return stream.av1[0]["masterUrl"]
-        elif stream.h266:
-            return stream.h266[0]["masterUrl"]
-        return None
+        # 键名因版本而异，pick_stream_url 不看键、只按分辨率和码率挑最好的一条
+        return pick_stream_url(self.media.stream)
