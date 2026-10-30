@@ -113,21 +113,18 @@ class MessageSender:
         # 实际媒体段数量
         media_count = len(light) + len(heavy)
 
-        # 达到阈值后，强制合并转发，避免刷屏
-        force_merge = (media_count + (1 if render_card else 0)) >= self.cfg.forward_threshold
+        # 达到阈值后，强制合并转发，避免刷屏。
+        # 卡片不计入媒体数量：它始终独立发送，不进合并转发。
+        force_merge = media_count >= self.cfg.forward_threshold
         if force_merge_override is not None:
             force_merge = force_merge_override
-
-        # 合并转发时始终内联预览卡片（除非显式禁用）
-        if force_merge and render_card_override is not False:
-            render_card = True
 
         return {
             "light": light,
             "heavy": heavy,
             "render_card": render_card,
-            # 预览卡片：仅在“渲染卡片 + 不合并”时独立发送
-            "preview_card": render_card and not force_merge,
+            # 卡片始终独立成一条消息，与合并转发无关
+            "preview_card": render_card,
             "force_merge": force_merge,
         }
 
@@ -138,12 +135,10 @@ class MessageSender:
         plan: dict,
     ):
         """
-        发送预览卡片（独立消息）
+        发送预览卡片（始终独立于媒体消息）
 
-        场景：
-        - 只有一个重媒体
-        - 未触发合并转发
-        - 卡片作为“预览”，不与正文混合
+        只要 plan 要求渲染卡片，就先单独发一条卡片，再发媒体本身。
+        卡片不再参与合并转发：内容多的时候只是媒体进转发，卡片仍然独立。
         """
         if not plan["preview_card"]:
             return
@@ -165,10 +160,8 @@ class MessageSender:
         """
         segs: list[BaseMessageComponent] = []
 
-        # 合并转发时，卡片以内联形式作为一个消息段参与合并
-        if plan["render_card"] and plan["force_merge"]:
-            if image_path := await self.renderer.render_card(result):
-                segs.append(self._image_from_path(image_path))
+        # 卡片统一由 _send_preview_card 独立发送，这里不再插入，
+        # 否则卡片会既单独发一条、又出现在合并转发里出现两次。
 
         # 轻媒体处理
         for cont in plan["light"]:
