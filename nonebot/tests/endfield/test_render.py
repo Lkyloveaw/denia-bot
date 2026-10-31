@@ -101,6 +101,14 @@ class RenderClientTest(unittest.IsolatedAsyncioTestCase):
         data = await client.health()
         self.assertTrue(data["ok"])
 
+    async def test_connect_error_is_render_error(self):
+        def handler(request):
+            raise httpx.ConnectError("boom", request=request)
+
+        client = self._make(handler)
+        with self.assertRaises(RenderError):
+            await client.render_html("<html>x</html>")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -73,15 +73,18 @@ class RenderClient:
         if not (MIN_TIMEOUT_MS <= int(timeout_ms) <= MAX_TIMEOUT_MS):
             raise RenderError(f"timeout out of range: {timeout_ms}")
 
-        response = await self._client.post(
-            f"{self.base_url}/render",
-            json={
-                "html": html,
-                "width": int(width),
-                "height": int(height),
-                "timeout_ms": int(timeout_ms),
-            },
-        )
+        try:
+            response = await self._client.post(
+                f"{self.base_url}/render",
+                json={
+                    "html": html,
+                    "width": int(width),
+                    "height": int(height),
+                    "timeout_ms": int(timeout_ms),
+                },
+            )
+        except httpx.RequestError as exc:
+            raise RenderError(f"renderer request failed: {exc}") from exc
         if response.status_code == 429:
             raise RenderError("renderer busy", status=429)
         if response.status_code >= 500:

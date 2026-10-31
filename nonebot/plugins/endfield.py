@@ -18,6 +18,7 @@ from nonebot import get_driver, on_message
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
     MessageEvent,
+    MessageSegment,
     PrivateMessageEvent,
 )
 from nonebot.rule import Rule
@@ -25,15 +26,19 @@ from nonebot.rule import Rule
 from muicebot.plugin import PluginMetadata
 
 try:
+    from endfield import cards
     from endfield import client as ec
     from endfield import config as ecfg
     from endfield import logic
+    from endfield import render as er
     from endfield import store as estore
 except ImportError:  # 不是从 nonebot\ 启动
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from endfield import cards
     from endfield import client as ec
     from endfield import config as ecfg
     from endfield import logic
+    from endfield import render as er
     from endfield import store as estore
 
 __plugin_meta__ = PluginMetadata(
@@ -54,6 +59,14 @@ _pending_consent: set[str] = set()
 _pending_auth: dict[str, str] = {}
 
 PRIVATE_ONLY = set(logic.PRIVATE_COMMANDS)
+CARD_COMMANDS = {
+    "抽卡记录",
+    "抽卡分析",
+    "干员列表",
+    "干员面板",
+    "危机合约",
+    "日历",
+}
 
 
 def _superusers() -> set[str]:
@@ -159,6 +172,27 @@ def _status_approved(data: Mapping[str, Any]) -> bool:
 
 async def _send(event: MessageEvent, text: str) -> None:
     await matcher.send(text)
+
+
+async def _send_card(event: MessageEvent, title: str, text: str) -> None:
+    """图卡优先；渲染器不可用/超限时回退文本。"""
+    config = _config()
+    html = cards.build_card(title, text.splitlines())
+    client = er.RenderClient(
+        config.render_url, timeout=max(5, config.render_timeout_seconds + 5)
+    )
+    try:
+        png = await client.render_html(
+            html,
+            width=900,
+            height=1200,
+            timeout_ms=config.render_timeout_seconds * 1000,
+        )
+        await matcher.send(MessageSegment.image(png))
+    except er.RenderError:
+        await _send(event, text)
+    finally:
+        await client.close()
 
 
 async def _handle_consent(event: MessageEvent, qq: str) -> bool:
@@ -280,7 +314,7 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
         client = _client(event, qq)
         try:
             data = await client.get_wiki_activities()
-            await _send(event, logic.format_calendar(data))
+            await _send_card(event, "活动日历", logic.format_calendar(data))
         except ec.EndfieldConfigError:
             await _send(event, logic.error_text("config"))
         except ec.EndfieldRateLimitError:
@@ -368,7 +402,10 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
         else:
             await _send(event, "暂不支持该查询。")
             return
-        await _send(event, text)
+        if command.name in CARD_COMMANDS:
+            await _send_card(event, command.name, text)
+        else:
+            await _send(event, text)
     except ec.EndfieldAuthError as exc:
         await store.mark_invalid(qq, role_id, str(exc.code or exc.status or "auth"))
         await _send(event, logic.error_text("invalid_binding"))
