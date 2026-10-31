@@ -163,7 +163,7 @@ class EndfieldClient:
                     message or "forbidden", status=status, path=path
                 )
             if status == 400:
-                if framework_token or "framework_token" in message.lower():
+                if "framework_token" in message.lower() or "framework token" in message.lower():
                     raise EndfieldAuthError(
                         message or "missing framework token", status=status, path=path
                     )

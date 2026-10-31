@@ -56,7 +56,7 @@ SnowLuma  ──② 反向 WS ──▶  NoneBot2 :8080
 | `endfield` | 终末地：绑定/便签/理智/签到、抽卡/干员/危机/日历/成就/建设查询、图卡、公告与订阅；详见 `docs/endfield.md` |
 
 管理面板：`nonebot/dashboard.py`（FastAPI + 单页 HTML），提供群话题、天气推送、主人设置等管理接口。
-另有 `bot_monitor.py` 做只读状态检查与串行重启。终末地面板在 `/endfield`。
+另有 `bot_monitor.py` 做只读状态检查与串行重启。终末地已接入主面板侧栏；`/endfield` 跳转到 `/#endfield`。
 
 ---
 
@@ -126,6 +126,8 @@ cd nonebot && python -m pytest tests -q
 
 ## 许可
 
-代码以 MIT 许可发布（见 `LICENSE`）。
+仓库原创代码以 MIT 许可发布（见 `LICENSE`）。终末地的
+`nonebot/endfield/client.py`、`store.py`、`render.py` 是 AGPL-3.0-only 同源移植文件，
+见 `LICENSE-AGPL-3.0` 和 `docs/third-party/endfield-NOTICE.md`；分发包含这些文件的组合时按 AGPL 要求处理。
 自有代码之外的第三方部分保留各自许可：MuiceBot、SnowLuma、NapCat、AxonHub、media_parser 等。
 人格模板与语料为本项目私有数据，不含在仓库许可授权范围内。

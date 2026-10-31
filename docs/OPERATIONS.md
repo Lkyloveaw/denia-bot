@@ -128,9 +128,10 @@ knowledge/*.md  ──build_index──▶  rag/index/{chunks,tokens,lexicon,vec
 
 ## 10. 终末地（endfield）
 
-- 远程渲染器：宿主机模式 `HOST=127.0.0.1 PORT=3100`（开发服务器 3000 是 personal-wiki）；
+- 远程渲染器是独立预置服务，本次合并不含其服务端；接口见 `docs/endfield.md`。
+  已有开发服采用宿主机模式 `HOST=127.0.0.1 PORT=3100`（3000 是 personal-wiki）；
   机器人 `render_url=http://127.0.0.1:3100`，3100 不要对公网开。
-- Key：面板 `/endfield` 写入 `data/endfield_secrets.json`（0600），`ENDFIELD_API_KEY` 兜底；
+- Key：主面板「终末地」（`/endfield` 重定向）写入 `data/endfield_secrets.json`（0600），`ENDFIELD_API_KEY` 兜底；
   绑定 token 在 `data/endfield/bindings.json`（0600，明文，备份注意）。
 - 调度器随 bot 启动，60s tick；心跳 `data/endfield/heartbeat.json`（>180s 视为离线）；
   审计 `data/endfield/audit.jsonl`（1 MB 轮转），面板读尾部。

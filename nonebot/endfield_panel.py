@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 
 from endfield import client as ec
 from endfield import config as ecfg
@@ -126,7 +126,10 @@ def register(
             raise HTTPException(400, "invalid json") from exc
         if not isinstance(body, Mapping):
             raise HTTPException(400, "config must be object")
-        config = ecfg.EndfieldConfig.from_mapping(body)
+        config = ecfg.EndfieldConfig.from_mapping({**load_config().to_dict(), **body})
+        for key, value in body.items():
+            if key not in ecfg.DEFAULTS or config.to_dict().get(key) != value:
+                raise HTTPException(400, f"配置项无效：{key}")
         ecfg.save_config(config, config_path)
         return ecfg.public_view(config)
 
@@ -135,9 +138,9 @@ def register(
         authorized(req)
         users = await estore.BindingStore(bindings_path).all_users()
         rows = []
-        for user in users.values():
+        for qq, user in users.items():
             for item in user.get("bindings", []):
-                rows.append(estore.public_binding(item))
+                rows.append({"user": estore.mask_role_id(qq), **estore.public_binding(item)})
         return {"count": len(rows), "items": rows}
 
     @app.get("/api/endfield/subscriptions")
@@ -209,22 +212,22 @@ def register(
         if len(bucket) >= 5:
             raise HTTPException(429, "too many key tests")
         bucket.append(now)
-        info = key_info()
-        if not info["configured"]:
+        body = await _json_body(req)
+        key = str(body.get("api_key") or "").strip() or _read_key(secrets_path, env_fallback=True)
+        if not key:
             return {"ok": False, "error": "key not configured"}
-        key = _read_key(secrets_path, env_fallback=True)
         client = ec.EndfieldClient(key, timeout=10.0)
         try:
             await client.get_announcement_latest()
             return {"ok": True}
         except ec.EndfieldError as exc:
-            return {"ok": False, "error": type(exc).__name__, "message": exc.message}
+            return {"ok": False, "error": type(exc).__name__, "message": "连接失败，请检查密钥、网络或网关状态。"}
         finally:
             await client.close()
 
-    @app.get("/endfield", response_class=HTMLResponse)
-    def endfield_page() -> str:
-        return _PAGE
+    @app.get("/endfield")
+    def endfield_page() -> RedirectResponse:
+        return RedirectResponse("/#endfield")
 
 
 def _read_key(path: Path, *, env_fallback: bool = False) -> str:
@@ -312,38 +315,3 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
                 os.unlink(tmp_name)
             except OSError:
                 pass
-
-
-_PAGE = """<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>终末地 · 面板</title>
-<style>
-body{margin:0;background:#0f131b;color:#e8edf7;font-family:'Noto Sans CJK SC','Microsoft YaHei',sans-serif}
-main{max-width:960px;margin:0 auto;padding:32px 20px}
-h1{font-size:28px;margin:0 0 8px}.muted{color:#93a4bf;font-size:14px}
-section{background:#161d29;border:1px solid #253147;border-radius:12px;padding:18px;margin:16px 0}
-h2{font-size:18px;margin:0 0 10px}label{display:block;margin:8px 0 4px;color:#9fb0c9;font-size:13px}
-input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #2d3a51;background:#0f1520;color:#e8edf7}
-button{margin:8px 8px 0 0;padding:9px 14px;border:0;border-radius:8px;background:#3b82f6;color:#fff;cursor:pointer}
-button.secondary{background:#334155}pre{white-space:pre-wrap;word-break:break-word;color:#b9c7dc;font-size:13px}
-a{color:#7dd3fc}
-</style></head><body><main>
-<h1>终末地</h1><p class="muted">Key、状态、配置与只读数据。写绑定/订阅请回聊天命令。<a href="/">返回面板</a></p>
-<section><h2>API Key</h2><div id="key" class="muted">加载中…</div>
-<label>新 Key（不会回显）</label><input id="keyInput" type="password" autocomplete="off">
-<button onclick="saveKey()">保存</button><button class="secondary" onclick="deleteKey()">删除</button>
-<button class="secondary" onclick="testKey()">测试连接</button></section>
-<section><h2>状态</h2><pre id="status">加载中…</pre></section>
-<section><h2>配置</h2><pre id="config">加载中…</pre>
-<button onclick="saveConfig()">保存配置</button></section>
-<section><h2>绑定 / 订阅</h2><pre id="data">加载中…</pre></section>
-<script>
-async function api(path, opts){const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));const t=await r.text();let j;try{j=JSON.parse(t)}catch(e){j=t}if(!r.ok)throw new Error(r.status+' '+JSON.stringify(j));return j}
-async function load(){try{const [k,s,b,sub]=await Promise.all([api('/api/endfield/key'),api('/api/endfield/status'),api('/api/endfield/bindings'),api('/api/endfield/subscriptions')]);document.getElementById('key').textContent=JSON.stringify(k);document.getElementById('status').textContent=JSON.stringify(s,null,2);document.getElementById('data').textContent=JSON.stringify({bindings:b,subscriptions:sub},null,2);document.getElementById('config').textContent=JSON.stringify(s.config,null,2)}catch(e){document.getElementById('status').textContent='请先登录主面板：'+e.message}}
-async function saveKey(){const api_key=document.getElementById('keyInput').value.trim();if(!api_key)return;try{await api('/api/endfield/key',{method:'POST',body:JSON.stringify({api_key})});document.getElementById('keyInput').value='';load()}catch(e){alert(e.message)}}
-async function deleteKey(){if(!confirm('删除面板 Key？'))return;try{await api('/api/endfield/key',{method:'DELETE'});load()}catch(e){alert(e.message)}}
-async function testKey(){try{const r=await api('/api/endfield/key/test',{method:'POST',body:'{}'});alert(JSON.stringify(r))}catch(e){alert(e.message)}}
-async function saveConfig(){try{const cfg=JSON.parse(document.getElementById('config').textContent);await api('/api/endfield/config',{method:'POST',body:JSON.stringify(cfg)});load()}catch(e){alert(e.message)}}
-load();
-</script></main></body></html>"""

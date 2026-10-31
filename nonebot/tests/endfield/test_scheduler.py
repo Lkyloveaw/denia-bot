@@ -118,7 +118,7 @@ class SchedulerTest(unittest.IsolatedAsyncioTestCase):
             "published_at_ts": 101,
             "title": "公告二",
         }
-        await self.scheduler.tick(datetime(2026, 10, 31, 12, 2))
+        await self.scheduler.tick(datetime(2026, 10, 31, 12, 20))
         self.assertEqual(len(self.sink.group_messages), 2)
         self.assertIn("公告二", self.sink.group_messages[1][1])
 
@@ -135,12 +135,14 @@ class SchedulerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.sink.private_messages), 1, "满理智不重复推")
 
         self.fake.stamina = {"stamina": {"current": 10, "max": 120}}
-        await self.scheduler.tick(datetime(2026, 10, 31, 12, 2))
+        await self.scheduler.tick(datetime(2026, 10, 31, 12, 20))
         sub = (await self.subscriptions.list_personal("sanity"))["100"]
         self.assertEqual(sub["last_notified"], 0)
 
         self.fake.stamina = {"stamina": {"current": 120, "max": 120}}
-        await self.scheduler.tick(datetime(2026, 10, 31, 12, 3))
+        await self.scheduler.tick(datetime(2026, 10, 31, 12, 40))
+        self.assertEqual(len(self.sink.private_messages), 1, "回落后仍保留四小时冷却")
+        await self.scheduler.tick(datetime(2026, 10, 31, 16, 0))
         self.assertEqual(len(self.sink.private_messages), 2)
 
     async def test_tickets_full(self):

@@ -22,7 +22,8 @@ function Get-Process {{ param($Id) [pscustomobject]@{{Id=$Id}} }}
 function Stop-Process {{ param($Id) $script:stopped += $Id; Write-Output "stopped:$Id" }}
 . '{script}'
 '''
-        return subprocess.run(['powershell.exe','-NoProfile','-Command',code], capture_output=True, text=True, timeout=15)
+        # Only this isolated subprocess runs the local script; machine policy is unchanged.
+        return subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-Command',code], capture_output=True, text=True, timeout=15)
 
     def test_only_matching_processes_are_stopped(self):
         result = self.run_script(101)

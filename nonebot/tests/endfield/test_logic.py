@@ -208,7 +208,7 @@ class EndfieldLogicTest(unittest.TestCase):
         self.assertIn("净罪", crisis)
         self.assertIn("得分 100", crisis)
         calendar = logic.format_calendar(
-            {"activities": [{"name": "活动A", "activity_start_at_ts": 1, "activity_end_at_ts": 2}]}
+            {"activities": [{"name": "活动A", "activity_start_at_ts": 1, "activity_end_at_ts": 2}]}, now=1
         )
         self.assertIn("活动A", calendar)
         sync = logic.format_sync_status({"status": "completed", "new_records": 5})

@@ -5,8 +5,11 @@ from pathlib import Path
 os.chdir(Path(__file__).resolve().parents[1])
 sys.path.insert(0, os.getcwd())
 import nonebot
-nonebot.init()
-nonebot.load_plugin('muicebot')
+try:  # 整份用例同进程跑时复用已初始化的 NoneBot（见 tests/_bootstrap.py）
+    from tests._bootstrap import ensure_nonebot
+except ImportError:  # discover 以 tests 为顶层时模块名不带包前缀
+    from _bootstrap import ensure_nonebot
+ensure_nonebot()
 from plugins.weather import parse, as_picture
 
 assert parse('天气 北京') == ('北京', False)

@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Mapping, Sequence, TypeVar
 
 T = TypeVar("T")
@@ -220,6 +221,20 @@ def format_stamina(data: Any) -> str:
 
 def format_note(data: Any) -> str:
     payload = _mapping(data)
+    base = _mapping(payload.get("base"))
+    if base:
+        lines = [f"便签：{base.get('name') or '干员'}",
+                 f"等级 {base.get('level', '—')} / 世界等级 {base.get('worldLevel', '—')}"]
+        mission = _mapping(base.get('mainMission')).get('description')
+        if mission:
+            lines.append(f"主线：{mission}")
+        chars = payload.get('chars')
+        if isinstance(chars, list):
+            lines.append(f"干员 {len(chars)} 位")
+        achieve = _mapping(payload.get('achieve'))
+        if 'count' in achieve:
+            lines.append(f"成就 {achieve['count']}")
+        return '\n'.join(lines)
     note = _mapping(payload.get("note") or payload)
     parts: list[str] = []
     for label, keys in (
@@ -381,24 +396,47 @@ def format_crisis_contract(data: Any, *, contract: Any = None) -> str:
     return "危机合约：" + " / ".join(parts)
 
 
-def format_calendar(data: Any) -> str:
+def format_calendar(data: Any, *, now: float | None = None) -> str:
     payload = _mapping(data)
     activities = payload.get("activities") or payload.get("list") or []
     if not isinstance(activities, list) or not activities:
         return "暂无活动日历数据。"
+    current = time.time() if now is None else now
+    def stamp(row, key):
+        try:
+            return float(row.get(f'activity_{key}_at_ts') or row.get(f'{key}_at_ts') or 0)
+        except (ValueError, TypeError):
+            return 0
+    activities = [row for row in activities if isinstance(row, Mapping) and
+                  (not stamp(row, 'end') or stamp(row, 'end') >= current)]
+    activities.sort(key=lambda row: (stamp(row, 'start') > current, stamp(row, 'end') or float('inf')))
+    if not activities:
+        return "暂无进行中或即将开始的活动。"
     lines = ["活动日历："]
     for item in activities[:10]:
         row = _mapping(item)
         name = row.get("name") or row.get("title") or "未命名活动"
-        start = row.get("activity_start_at_ts") or row.get("start_at_ts") or ""
-        end = row.get("activity_end_at_ts") or row.get("end_at_ts") or ""
+        start = _format_ts(stamp(row, 'start'))
+        end = _format_ts(stamp(row, 'end'))
         window = f"（{start} - {end}）" if start or end else ""
         lines.append(f"- {name}{window}")
+    if len(activities) > 10:
+        lines.append(f"另有 {len(activities) - 10} 项活动，本次展示最近 10 项。")
     return "\n".join(lines)
 
 
 def format_achievements(data: Any) -> str:
     payload = _mapping(data)
+    achieve = _mapping(payload.get('achieve')) or payload
+    medals = achieve.get('achieveMedals')
+    if isinstance(medals, list) and medals:
+        lines = [f"成就：{achieve.get('count', len(medals))}"]
+        for medal in medals:
+            row = _mapping(medal)
+            detail = _mapping(row.get('achievementData'))
+            lines.append(f"{detail.get('name') or '未命名成就'} · 等级 {row.get('level', 1)}" +
+                         (' · 已镀层' if row.get('isPlated') else ''))
+        return '\n'.join(lines)
     rows = payload.get("achievements") or payload.get("list") or []
     if not isinstance(rows, list) or not rows:
         return "暂无成就数据。"
@@ -437,6 +475,16 @@ def format_spaceship(data: Any) -> str:
 
 
 def format_domain(data: Any) -> str:
+    zones = data.get('domain') if isinstance(data, Mapping) else None
+    if isinstance(zones, list) and zones:
+        lines = ['地区建设：']
+        for value in zones:
+            zone = _mapping(value)
+            lines.append(f"{zone.get('name') or '未知地区'} · 等级 {zone.get('level', '—')}")
+            for value in zone.get('settlements') or []:
+                settlement = _mapping(value)
+                lines.append(f"  {settlement.get('name') or '聚落'} · 调度券 {settlement.get('remainMoney', '—')}/{settlement.get('moneyMax', '—')}")
+        return '\n'.join(lines)
     payload = _mapping(data.get("domain") if isinstance(data, Mapping) else data)
     payload = payload or _mapping(data)
     level = _first(payload, "level", "lv")
@@ -455,6 +503,11 @@ def format_domain(data: Any) -> str:
 
 
 def format_global_stats(data: Any) -> str:
+    stats = _mapping(_mapping(data).get('stats')) or _mapping(data)
+    if 'total_pulls' in stats:
+        return (f"全服统计：\n总抽数 {stats['total_pulls']}\n统计用户 {stats.get('total_users', '—')}"
+                f"\n六星 {stats.get('star6_total', '—')} / 五星 {stats.get('star5_total', '—')}"
+                f"\n平均出六星抽数 {stats.get('avg_pity', '—')}")
     text = format_gacha_stats(data)
     if text.startswith("暂无"):
         return "暂无全服统计。"
@@ -465,7 +518,7 @@ def format_announcement_latest(data: Any) -> str:
     payload = _mapping(data.get("announcement") if isinstance(data, Mapping) else data)
     payload = payload or _mapping(data)
     title = payload.get("title") or "终末地公告"
-    summary = str(payload.get("summary") or "").strip()
+    summary = announcement_summary(payload)
     published = _format_ts(payload.get("published_at_ts"))
     lines = [f"【终末地公告】{title}"]
     if published:
@@ -473,6 +526,21 @@ def format_announcement_latest(data: Any) -> str:
     if summary:
         lines.append(summary[:800])
     return "\n".join(lines)
+
+
+def announcement_summary(payload: Mapping[str, Any]) -> str:
+    if payload.get('summary'):
+        return str(payload['summary']).strip()
+    texts = {str(row.get('id')): str(row.get('content') or '')
+             for row in payload.get('texts') or [] if isinstance(row, Mapping)}
+    parts = []
+    for value in payload.get('caption') or []:
+        row = _mapping(value)
+        if row.get('type') == 'text':
+            parts.append(texts.get(str(row.get('id')), ''))
+        elif row.get('type') == 'newline':
+            parts.append('\n')
+    return ''.join(parts).strip() or '\n'.join(texts.values())
 
 
 def format_announcement_list(data: Any) -> str:
@@ -519,8 +587,10 @@ def format_subscription_list(
 
 
 def _format_ts(value: Any) -> str:
+    if not value:
+        return ''
     try:
-        return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M")
+        return datetime.fromtimestamp(int(value), ZoneInfo('Asia/Shanghai')).strftime("%Y-%m-%d %H:%M")
     except (TypeError, ValueError, OSError):
         return str(value or "")
 
@@ -531,7 +601,7 @@ def format_sync_status(data: Any) -> str:
     if status in {"completed", "success", "done"}:
         return f"同步完成，新增 {payload.get('new_records', 0)} 条。"
     if status in {"failed", "error"}:
-        return f"同步失败：{payload.get('error') or '未知错误'}"
+        return "同步失败，请稍后再试或检查账号授权。"
     if status in {"conflict", "running"}:
         return "服务器正在同步，请稍后再查。"
     return "同步已提交，请稍后再查。"

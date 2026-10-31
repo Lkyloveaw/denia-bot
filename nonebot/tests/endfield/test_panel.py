@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -19,6 +20,22 @@ from endfield_panel import register  # noqa: E402
 
 
 class PanelTest(unittest.TestCase):
+    def test_partial_config_preserves_existing_fields(self):
+        self._seed_config()
+        self.client.post('/api/endfield/config', json={'quiet_start': '21:30'})
+        result = self.client.post('/api/endfield/config', json={'enabled': False})
+        self.assertEqual(result.json()['quiet_start'], '21:30')
+        self.assertEqual(result.json()['render_url'], 'http://127.0.0.1:3000')
+
+    def test_test_key_uses_unsaved_input_without_persisting(self):
+        self._seed_key()
+        fake = AsyncMock()
+        with patch('endfield_panel.ec.EndfieldClient', return_value=fake) as factory:
+            result = self.client.post('/api/endfield/key/test', json={'api_key': 'unsaved-key-12345'})
+        self.assertTrue(result.json()['ok'])
+        self.assertEqual(factory.call_args.args[0], 'unsaved-key-12345')
+        self.assertEqual(self.client.get('/api/endfield/key').json()['masked'], '****3456')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -160,10 +177,9 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(self.auth_calls, 4)
 
     def test_page(self):
-        page = self.client.get("/endfield")
-        self.assertEqual(page.status_code, 200)
-        self.assertIn("终末地", page.text)
-        self.assertIn("/api/endfield/key", page.text)
+        page = self.client.get("/endfield", follow_redirects=False)
+        self.assertEqual(page.status_code, 307)
+        self.assertEqual(page.headers["location"], "/#endfield")
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ class EndfieldConfigTest(unittest.TestCase):
         config = cfg.load_config(self.path)
         self.assertTrue(config.enabled)
         self.assertEqual(config.announcement_poll_minutes, 10)
-        self.assertEqual(config.render_url, "http://127.0.0.1:3000")
+        self.assertEqual(config.render_url, "http://127.0.0.1:3100")
         self.assertEqual(config.log_level, "INFO")
 
     def test_roundtrip(self):

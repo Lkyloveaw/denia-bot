@@ -15,8 +15,9 @@
 - `nonebot/endfield/client.py`（源自 `core/client.py`）
 - `nonebot/endfield/store.py`（源自 `core/user.py`）
 - `nonebot/endfield/render.py`（源自 `core/render.py`）
-- `nonebot/endfield/templates/` 及模板图片/资源（源自 `resources/`）
 - 根 `LICENSE-AGPL-3.0`
+
+当前没有分发上游 16 套模板及图片资源，也没有 `nonebot/endfield/templates/` 目录。
 
 ## 新写（MIT）
 
@@ -24,8 +25,10 @@
 
 - `nonebot/endfield/config.py`
 - `nonebot/endfield/logic.py`
+- `nonebot/endfield/cards.py`（自包含通用图卡）
 - `nonebot/endfield/scheduler.py`
 - `nonebot/plugins/endfield.py`
+- `nonebot/endfield_panel.py`
 - `nonebot/dashboard.py` / `dashboard.html` 的 endfield 增量
 - `nonebot/tests/endfield/`
 
@@ -36,6 +39,6 @@
 
 ## 其他
 
-- 远程渲染器 `docker/playwright-renderer/` 为本仓库原创（MIT），不复制上游模板。
+- HTML→PNG 渲染服务是独立部署的前置服务，本次合并未分发其源码或容器；接口见 `docs/endfield.md`。
 - 字体：图卡使用渲染器镜像的 Noto CJK；不内联上游 8 MB 字体。
 - 本文件不包含 API Key、framework token、QQ 号等敏感信息。

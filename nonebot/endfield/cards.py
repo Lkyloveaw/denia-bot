@@ -7,11 +7,58 @@
 from __future__ import annotations
 
 from html import escape
+from dataclasses import dataclass
+import unicodedata
 from typing import Sequence
 
 MAX_LINES = 40
 CARD_WIDTH = 900
 CARD_HEIGHT = 1200
+
+
+@dataclass(frozen=True)
+class CardPage:
+    html: str
+    height: int
+
+
+def build_pages(title: str, lines: Sequence[str]) -> list[CardPage]:
+    """Conservative fixed-width wrapping keeps every row inside the screenshot."""
+    chunks = []
+    rows = []
+    used = 0
+    for line in lines:
+        text = str(line)
+        if not text.strip():
+            continue
+        wrapped = []
+        while text:
+            units = 0
+            end = 0
+            for char in text:
+                cost = 2 if unicodedata.east_asian_width(char) in {'W', 'F'} or char.isalpha() else 1
+                if units + cost > 60:
+                    break
+                units += cost
+                end += 1
+            if end < len(text):
+                space = text.rfind(' ', 0, end)
+                if space > end // 2:
+                    end = space + 1
+            wrapped.append(text[:end])
+            text = text[end:]
+        for start in range(0, len(wrapped), 24):
+            part = wrapped[start:start + 24]
+            cost = 27 + 35 * len(part)
+            if used + cost > 1600 and rows:
+                chunks.append((rows, used)); rows = []; used = 0
+            rows.append('\n'.join(part)); used += cost
+    if rows or not chunks:
+        chunks.append((rows, used))
+    return [CardPage(
+        build_card(title, chunk, footer=f"第 {index}/{len(chunks)} 张 · 终末地"),
+        max(CARD_HEIGHT, 440 + height),
+    ) for index, (chunk, height) in enumerate(chunks, 1)]
 
 _STYLE = """
 * { box-sizing: border-box; }
@@ -53,6 +100,7 @@ ul {
   padding: 0;
 }
 li {
+  white-space: pre-wrap;
   padding: 13px 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
   font-size: 22px;

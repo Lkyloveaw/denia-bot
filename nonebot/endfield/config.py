@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
-DEFAULT_RENDER_URL = "http://127.0.0.1:3000"
+DEFAULT_RENDER_URL = "http://127.0.0.1:3100"
 LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 
 DEFAULTS: dict[str, Any] = {

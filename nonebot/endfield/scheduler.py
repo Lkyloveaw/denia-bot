@@ -24,6 +24,7 @@ from .client import (
     EndfieldTransientError,
 )
 from .config import EndfieldConfig
+from .logic import announcement_summary
 from .store import BindingStore, StoreError, SubscriptionStore
 
 
@@ -82,20 +83,35 @@ class EndfieldScheduler:
         self._last_sanity_poll = 0
         self._last_ticket_poll = 0
         self._last_signin_poll = 0
+        self._backoff_until = 0
 
     async def tick(self, now: datetime | None = None) -> None:
         current = now or self.clock()
         self._current = current
         config = self.config_provider()
-        if not config.enabled:
+        if not config.enabled or os.environ.get("ENDFIELD_PUSH_DRY_RUN", "").lower() in {"1", "true"}:
+            self._write_heartbeat(current)
             return
-        if config.enable_subscriptions:
-            await self._poll_announcements(current, config)
-            if not _in_quiet(current, config):
-                await self._poll_sanity(current, config)
-                await self._poll_tickets(current, config)
-        if config.enable_signin:
-            await self._poll_signin(current, config)
+        meta = await self.subscriptions.get_meta()
+        self._backoff_until = max(self._backoff_until, int(meta.get("backoff_until") or 0))
+        if current.timestamp() < self._backoff_until:
+            self._write_heartbeat(current)
+            return
+        try:
+            if config.enable_subscriptions:
+                if current.timestamp() - self._last_announcement_poll >= config.announcement_poll_minutes * 60:
+                    await self._poll_announcements(current, config)
+                if not _in_quiet(current, config):
+                    if current.timestamp() - self._last_sanity_poll >= config.sanity_poll_minutes * 60:
+                        await self._poll_sanity(current, config)
+                    if current.timestamp() - self._last_ticket_poll >= config.ticket_poll_minutes * 60:
+                        await self._poll_tickets(current, config)
+            if config.enable_signin:
+                await self._poll_signin(current, config)
+        except EndfieldRateLimitError:
+            self._backoff_until = int(current.timestamp()) + 600
+            await self.subscriptions.update_meta("backoff_until", self._backoff_until)
+            self._audit("rate_limit", retry_after_seconds=600)
         self._write_heartbeat(current)
 
     async def run_forever(self, interval: float = 60.0) -> None:
@@ -104,8 +120,8 @@ class EndfieldScheduler:
                 await self.tick()
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                pass
+            except Exception as exc:
+                self._audit("scheduler_error", error=type(exc).__name__)
             await asyncio.sleep(interval)
 
     async def _poll_announcements(
@@ -120,6 +136,8 @@ class EndfieldScheduler:
             return
         try:
             latest = await client.get_announcement_latest()
+        except EndfieldRateLimitError:
+            raise
         except (EndfieldError, StoreError):
             return
         finally:
@@ -172,6 +190,9 @@ class EndfieldScheduler:
         for qq, sub in subs.items():
             if not isinstance(sub, Mapping) or not sub.get("enabled", True):
                 continue
+            if sub.get("pending_auth_notification"):
+                await self._notify_invalid("sanity", str(qq), sub, now, config)
+                continue
             binding = await self.bindings.get_primary(qq)
             if not binding or binding.get("status") != "valid":
                 continue
@@ -186,10 +207,14 @@ class EndfieldScheduler:
                 )
             except EndfieldAuthError as exc:
                 await self.bindings.mark_invalid(
-                    qq, binding.get("role_id"), str(exc.code or exc.status or "auth")
+                    qq, binding.get("role_id"), str(exc.code or exc.status or "auth"), server_id=int(binding.get("server_id") or 1)
                 )
+                await self.subscriptions.update_personal("sanity", qq, pending_auth_notification=True)
+                await self._notify_invalid("sanity", str(qq), sub, now, config)
                 continue
-            except (EndfieldRateLimitError, EndfieldTransientError, EndfieldError):
+            except EndfieldRateLimitError:
+                raise
+            except (EndfieldTransientError, EndfieldError):
                 continue
             finally:
                 await client.close()
@@ -199,6 +224,8 @@ class EndfieldScheduler:
             if current >= maximum:
                 if int(sub.get("last_notified") or 0) == 1:
                     continue
+                if now.timestamp() - int(sub.get("last_notified_at") or 0) < 4 * 3600:
+                    continue
                 if not self._can_push(now, str(qq), config):
                     continue
                 text = (
@@ -207,7 +234,7 @@ class EndfieldScheduler:
                 )
                 if await self._push_private(str(qq), text, config):
                     await self.subscriptions.update_personal(
-                        "sanity", qq, last_notified=1, fail_count=0
+                        "sanity", qq, last_notified=1, last_notified_at=int(now.timestamp()), fail_count=0
                     )
                     self._audit("sanity_push", ok=True)
                 else:
@@ -225,6 +252,9 @@ class EndfieldScheduler:
         for qq, sub in subs.items():
             if not isinstance(sub, Mapping) or not sub.get("enabled", True):
                 continue
+            if sub.get("pending_auth_notification"):
+                await self._notify_invalid("tickets", str(qq), sub, now, config)
+                continue
             binding = await self.bindings.get_primary(qq)
             if not binding or binding.get("status") != "valid":
                 continue
@@ -239,16 +269,22 @@ class EndfieldScheduler:
                 )
             except EndfieldAuthError as exc:
                 await self.bindings.mark_invalid(
-                    qq, binding.get("role_id"), str(exc.code or exc.status or "auth")
+                    qq, binding.get("role_id"), str(exc.code or exc.status or "auth"), server_id=int(binding.get("server_id") or 1)
                 )
+                await self.subscriptions.update_personal("tickets", qq, pending_auth_notification=True)
+                await self._notify_invalid("tickets", str(qq), sub, now, config)
                 continue
-            except (EndfieldRateLimitError, EndfieldTransientError, EndfieldError):
+            except EndfieldRateLimitError:
+                raise
+            except (EndfieldTransientError, EndfieldError):
                 continue
             finally:
                 await client.close()
             full_zones = _full_zones(data)
             if full_zones:
                 if int(sub.get("last_notified") or 0) == 1:
+                    continue
+                if now.timestamp() - int(sub.get("last_notified_at") or 0) < 4 * 3600:
                     continue
                 if not self._can_push(now, str(qq), config):
                     continue
@@ -258,7 +294,7 @@ class EndfieldScheduler:
                 )
                 if await self._push_private(str(qq), text, config):
                     await self.subscriptions.update_personal(
-                        "tickets", qq, last_notified=1, fail_count=0
+                        "tickets", qq, last_notified=1, last_notified_at=int(now.timestamp()), fail_count=0
                     )
                     self._audit("tickets_push", ok=True)
                 else:
@@ -277,57 +313,115 @@ class EndfieldScheduler:
         for qq, sub in subs.items():
             if not isinstance(sub, Mapping) or not sub.get("enabled", True):
                 continue
+            pending = str(sub.get("pending_notification") or "")
+            if pending and not _in_quiet(now, config) and self._can_push(now, str(qq), config):
+                if await self._push_private(str(qq), pending, config):
+                    sub = await self.subscriptions.update_personal("signin", qq, pending_notification="", fail_count=0)
+                else:
+                    await self._record_push_failure("signin", qq, sub, config)
+                    continue
             if str(sub.get("last_run_date") or "") == today:
                 continue
             if not _signin_due(now, config, str(qq)):
                 continue
             bindings = await self.bindings.list_bindings(qq)
             valid = [item for item in bindings if item.get("status") == "valid"]
-            if not valid:
+            progress = dict(sub.get("signin_accounts") or {}) if sub.get("signin_date") == today else {}
+            if not valid and not progress:
                 continue
             client = self.client_factory(str(qq))
             if client is None:
                 continue
-            success = 0
-            failures: list[str] = []
+            attempted = False
             try:
                 for binding in valid:
+                    role = str(binding.get("role_id") or "")
+                    server = int(binding.get("server_id") or 1)
+                    account = f"{server}:{role}"
+                    previous = progress.get(account, {})
+                    if previous and previous.get("result") != "retry":
+                        continue
+                    if int(previous.get("retry_at") or 0) > now.timestamp():
+                        return
+                    if attempted:
+                        await asyncio.sleep(1.5)
+                    attempted = True
+                    # Persist before POST: after cancellation/timeout/restart its result
+                    # is unknown, so it must not be sent again automatically today.
+                    progress[account] = {"result": "unknown", "error": "签到结果未确认，请手动查询"}
+                    await self.subscriptions.update_personal(
+                        "signin", qq, signin_date=today, signin_accounts=progress
+                    )
                     try:
                         await client.post_attendance(
                             str(binding.get("framework_token") or ""),
-                            str(binding.get("role_id") or ""),
-                            int(binding.get("server_id") or 1),
+                            role, server,
                         )
-                        success += 1
+                        progress[account] = {"result": "ok"}
                     except EndfieldAuthError as exc:
-                        failures.append("token 失效")
+                        progress[account] = {"result": "failed", "error": "token 失效，请重新授权"}
                         await self.bindings.mark_invalid(
-                            qq,
-                            binding.get("role_id"),
-                            str(exc.code or exc.status or "auth"),
+                            qq, role, str(exc.code or exc.status or "auth"), server_id=server,
                         )
+                    except EndfieldRateLimitError:
+                        # An explicit rejection is the only safe retry for this POST.
+                        # Retry once on a later tick, without blocking for 60 seconds.
+                        if previous.get("result") == "retry":
+                            progress[account] = {"result": "failed", "error": "网关持续限流"}
+                        else:
+                            progress[account] = {"result": "retry", "retry_at": int(now.timestamp()) + 60}
+                        await self.subscriptions.update_personal(
+                            "signin", qq, signin_date=today, signin_accounts=progress
+                        )
+                        self._backoff_until = int(now.timestamp()) + 60
+                        await self.subscriptions.update_meta("backoff_until", self._backoff_until)
+                        self._audit("rate_limit", retry_after_seconds=60)
+                        return
                     except EndfieldError:
-                        failures.append("接口失败")
+                        progress[account] = {"result": "failed", "error": "接口失败，未自动重试"}
+                    await self.subscriptions.update_personal(
+                        "signin", qq, signin_date=today, signin_accounts=progress
+                    )
             finally:
                 await client.close()
+            success = sum(item.get("result") == "ok" for item in progress.values())
+            failures = [str(item.get("error") or "签到结果未确认")
+                        for item in progress.values() if item.get("result") != "ok"]
             result = "ok" if not failures else ("partial" if success else "failed")
+            notification = (f"自动签到完成：成功 {success}/{len(progress)}；{'；'.join(failures[:3])}" if failures else "")
             await self.subscriptions.update_personal(
                 "signin",
                 qq,
                 last_run_date=today,
                 last_result=result,
                 last_error="；".join(failures)[:200],
+                pending_notification=notification,
             )
             self._audit(
                 "signin", result=result, success=success, failed=len(failures)
             )
-            if failures and not _in_quiet(now, config):
-                await self._push_private(
-                    str(qq),
-                    f"自动签到完成：成功 {success}/{len(valid)}；"
-                    f"{'；'.join(failures[:3])}",
-                    config,
-                )
+            if notification and not _in_quiet(now, config) and self._can_push(now, str(qq), config):
+                if await self._push_private(str(qq), notification, config):
+                    await self.subscriptions.update_personal("signin", qq, pending_notification="", fail_count=0)
+                else:
+                    await self._record_push_failure("signin", qq, sub, config)
+
+    async def _notify_invalid(
+        self, kind: str, qq: str, sub: Mapping[str, Any], now: datetime, config: EndfieldConfig
+    ) -> None:
+        binding = await self.bindings.get_primary(qq)
+        if binding and binding.get("status") == "valid":
+            await self.subscriptions.update_personal(kind, qq, pending_auth_notification=False)
+            return
+        if _in_quiet(now, config) or not self._can_push(now, qq, config):
+            return
+        text = "终末地绑定已失效，个人提醒已暂停。请私聊发送「授权登陆」重新授权。"
+        if await self._push_private(qq, text, config):
+            await self.subscriptions.update_personal(
+                kind, qq, pending_auth_notification=False, fail_count=0
+            )
+        else:
+            await self._record_push_failure(kind, qq, sub, config)
 
     async def _push_private(
         self, qq: str, text: str, config: EndfieldConfig
@@ -364,6 +458,7 @@ class EndfieldScheduler:
             qq,
             fail_count=fail_count,
             enabled=fail_count < config.push_disable_after_failures,
+            last_error="私聊推送失败",
         )
         self._audit("push_failure", kind=kind, fail_count=fail_count)
 
@@ -463,7 +558,7 @@ def _full_zones(data: Any) -> list[str]:
 
 def _announcement_text(item: Mapping[str, Any]) -> str:
     title = str(item.get("title") or "终末地新公告")
-    summary = str(item.get("summary") or "").strip()
+    summary = announcement_summary(item)
     text = f"【终末地新公告】\n{title}"
     if summary:
         text += f"\n{summary[:800]}"

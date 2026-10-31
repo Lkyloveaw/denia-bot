@@ -186,6 +186,7 @@ class BindingStore:
             if existing is not None:
                 existing.update(
                     {
+                        "binding_id": normalized["binding_id"] or existing.get("binding_id", ""),
                         "framework_token": normalized["framework_token"],
                         "role_name": normalized["role_name"],
                         "alias": normalized["alias"] or existing.get("alias", ""),
@@ -256,12 +257,17 @@ class BindingStore:
         reason: str | None = None,
         *,
         when: str | None = None,
+        server_id: int | None = None,
     ) -> dict[str, Any]:
         async with self._lock:
             user = self._require_user(qq)
             bindings = user.get("bindings", [])
-            index = _resolve_index(bindings, ref)
-            binding = bindings[index]
+            if server_id is None:
+                binding = bindings[_resolve_index(bindings, ref)]
+            else:
+                binding = _find_binding(bindings, str(ref), int(server_id))
+                if binding is None:
+                    raise BindingNotFound("binding no longer exists")
             binding["status"] = "invalid"
             binding["invalid_reason"] = reason or "auth_invalid"
             binding["invalid_at"] = when or _now()
@@ -349,6 +355,8 @@ class SubscriptionStore:
                     "last_item_id": str(last_item_id or ""),
                     "enabled": True,
                     "updated_at": now,
+                    "fail_count": 0,
+                    "last_error": "",
                 }
             )
             await self._save()
@@ -413,6 +421,9 @@ class SubscriptionStore:
                 },
             )
             item["enabled"] = bool(enabled)
+            if enabled:
+                item["fail_count"] = 0
+                item["last_error"] = ""
             if target:
                 item["target"] = str(target)
             if kind == "signin":
