@@ -505,6 +505,54 @@ class EndfieldClient:
         )
         return data if isinstance(data, dict) else {}
 
+    async def get_spaceship(
+        self, framework_token: str, role_id: str = "", server_id: int = 1
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/endfield/spaceship",
+            params={"roleId": role_id, "serverId": server_id},
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_domain(
+        self, framework_token: str, role_id: str = "", server_id: int = 1
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/endfield/domain",
+            params={"roleId": role_id, "serverId": server_id},
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_achieve(
+        self, framework_token: str, role_id: str = "", server_id: int = 1
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/endfield/achieve",
+            params={"roleId": role_id, "serverId": server_id},
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_global_stats(
+        self, *, pool_period: str = "", provider: str = ""
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if pool_period:
+            params["pool_period"] = pool_period
+        if provider:
+            params["provider"] = provider
+        data = await self._request(
+            "GET",
+            "/api/endfield/gacha/global-stats",
+            params=params or None,
+        )
+        return data if isinstance(data, dict) else {}
+
 
 def _response_message(response: httpx.Response) -> str:
     try:

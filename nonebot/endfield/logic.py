@@ -106,6 +106,10 @@ QUERY_COMMANDS = frozenset(
         "干员面板",
         "危机合约",
         "日历",
+        "成就列表",
+        "帝江号建设",
+        "地区建设",
+        "全服统计",
     }
 )
 ALL_COMMANDS = PRIVATE_COMMANDS | QUERY_COMMANDS
@@ -129,6 +133,10 @@ def parse_command(text: Any) -> Command | None:
         "绑定列表",
         "抽卡分析",
         "日历",
+        "成就列表",
+        "帝江号建设",
+        "地区建设",
+        "全服统计",
         "同步抽卡",
         "同步面板",
     }:
@@ -359,6 +367,70 @@ def format_calendar(data: Any) -> str:
         window = f"（{start} - {end}）" if start or end else ""
         lines.append(f"- {name}{window}")
     return "\n".join(lines)
+
+
+def format_achievements(data: Any) -> str:
+    payload = _mapping(data)
+    rows = payload.get("achievements") or payload.get("list") or []
+    if not isinstance(rows, list) or not rows:
+        return "暂无成就数据。"
+    done = sum(
+        1
+        for item in rows
+        if isinstance(item, Mapping)
+        and (item.get("completed") or item.get("done") or item.get("status") == "done")
+    )
+    lines = [f"成就：已完成 {done}/{len(rows)}"]
+    for item in rows[:20]:
+        row = _mapping(item)
+        name = row.get("name") or row.get("title") or "未命名成就"
+        status = "已完成" if row.get("completed") or row.get("done") else "未完成"
+        date = row.get("completed_at") or row.get("finish_time") or ""
+        lines.append(f"- {name} | {status}{(' | ' + str(date)) if date else ''}")
+    return "\n".join(lines)
+
+
+def format_spaceship(data: Any) -> str:
+    payload = _mapping(data.get("spaceship") if isinstance(data, Mapping) else data)
+    payload = payload or _mapping(data)
+    level = _first(payload, "level", "lv")
+    power = _first(payload, "power", "energy", "electricity")
+    modules = payload.get("modules") or payload.get("rooms") or []
+    if level is None and power is None and not modules:
+        return "暂无帝江号建设数据。"
+    parts = ["帝江号建设"]
+    if level is not None:
+        parts.append(f"等级 {level}")
+    if power is not None:
+        parts.append(f"电力 {power}")
+    if isinstance(modules, list):
+        parts.append(f"模块 {len(modules)}")
+    return " / ".join(parts)
+
+
+def format_domain(data: Any) -> str:
+    payload = _mapping(data.get("domain") if isinstance(data, Mapping) else data)
+    payload = payload or _mapping(data)
+    level = _first(payload, "level", "lv")
+    money = _first(payload, "money", "remain_money", "currency")
+    settlements = payload.get("settlements") or payload.get("areas") or []
+    if level is None and money is None and not settlements:
+        return "暂无地区建设数据。"
+    parts = ["地区建设"]
+    if level is not None:
+        parts.append(f"等级 {level}")
+    if money is not None:
+        parts.append(f"调度券 {money}")
+    if isinstance(settlements, list):
+        parts.append(f"聚落 {len(settlements)}")
+    return " / ".join(parts)
+
+
+def format_global_stats(data: Any) -> str:
+    text = format_gacha_stats(data)
+    if text.startswith("暂无"):
+        return "暂无全服统计。"
+    return text.replace("抽卡分析：", "全服统计：", 1)
 
 
 def format_sync_status(data: Any) -> str:

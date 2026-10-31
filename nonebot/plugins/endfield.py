@@ -66,6 +66,10 @@ CARD_COMMANDS = {
     "干员面板",
     "危机合约",
     "日历",
+    "成就列表",
+    "帝江号建设",
+    "地区建设",
+    "全服统计",
 }
 
 
@@ -310,11 +314,18 @@ def _pick_contract(detail: Mapping[str, Any], desired: str = "") -> dict[str, An
 
 
 async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) -> None:
-    if command.name == "日历":
+    if command.name in {"日历", "全服统计"}:
         client = _client(event, qq)
         try:
-            data = await client.get_wiki_activities()
-            await _send_card(event, "活动日历", logic.format_calendar(data))
+            if command.name == "日历":
+                data = await client.get_wiki_activities()
+                text = logic.format_calendar(data)
+                title = "活动日历"
+            else:
+                data = await client.get_global_stats()
+                text = logic.format_global_stats(data)
+                title = "全服统计"
+            await _send_card(event, title, text)
         except ec.EndfieldConfigError:
             await _send(event, logic.error_text("config"))
         except ec.EndfieldRateLimitError:
@@ -322,7 +333,7 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
         except ec.EndfieldTransientError:
             await _send(event, logic.error_text("timeout"))
         except ec.EndfieldProtocolError:
-            await _send(event, "日历查询失败，请稍后再试。")
+            await _send(event, f"{command.name}查询失败，请稍后再试。")
         finally:
             await client.close()
         return
@@ -399,6 +410,15 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
                 token, str(contract_id), role_id=role_id, server_id=server_id
             )
             text = logic.format_crisis_contract(data, contract=contract)
+        elif command.name == "成就列表":
+            data = await client.get_achieve(token, role_id, server_id)
+            text = logic.format_achievements(data)
+        elif command.name == "帝江号建设":
+            data = await client.get_spaceship(token, role_id, server_id)
+            text = logic.format_spaceship(data)
+        elif command.name == "地区建设":
+            data = await client.get_domain(token, role_id, server_id)
+            text = logic.format_domain(data)
         else:
             await _send(event, "暂不支持该查询。")
             return

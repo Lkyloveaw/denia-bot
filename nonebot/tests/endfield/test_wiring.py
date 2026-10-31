@@ -143,6 +143,14 @@ def test_2a_commands_match():
     assert "同步抽卡" in endfield.logic.PRIVATE_COMMANDS
 
 
+def test_2b_commands_match():
+    for text in ("成就列表", "帝江号建设", "地区建设", "全服统计"):
+        assert endfield._rule(private_event(text)) is True
+        assert text in endfield.CARD_COMMANDS
+    assert endfield._rule(group_event("全服统计")) is False
+    assert endfield._rule(group_event("全服统计", at_self=True)) is True
+
+
 def test_2a_payload_helpers():
     row = endfield._find_char(
         [{"name_cn": "陈", "template_id": "tpl-1"}], "陈"

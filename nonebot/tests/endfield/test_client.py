@@ -300,6 +300,31 @@ class EndfieldClientTest(unittest.IsolatedAsyncioTestCase):
         data = await client.get_panel_char("token", "tpl-1")
         self.assertIn("panel", data)
 
+    async def test_2b_endpoints(self):
+        seen = []
+
+        def handler(request):
+            seen.append((request.url.path, dict(request.url.params), request.headers.get("x-framework-token")))
+            return httpx.Response(200, json={"code": 0, "data": {"ok": True}})
+
+        client = self._make(handler)
+        await client.get_achieve("token", "role-1", 2)
+        await client.get_spaceship("token", "role-1", 2)
+        await client.get_domain("token", "role-1", 2)
+        await client.get_global_stats()
+        self.assertEqual(
+            [item[0] for item in seen],
+            [
+                "/api/endfield/achieve",
+                "/api/endfield/spaceship",
+                "/api/endfield/domain",
+                "/api/endfield/gacha/global-stats",
+            ],
+        )
+        self.assertEqual(seen[0][1], {"roleId": "role-1", "serverId": "2"})
+        self.assertEqual(seen[0][2], "token")
+        self.assertIsNone(seen[3][2], "全服统计是公开端点，不带用户 token")
+
 
 if __name__ == "__main__":
     unittest.main()

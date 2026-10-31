@@ -221,6 +221,38 @@ class EndfieldLogicTest(unittest.TestCase):
         ok, _ = gate.check("1", "sync", now=101, day="2026-10-31")
         self.assertFalse(ok, "同步 1 次/天")
 
+    def test_parse_2b_commands(self):
+        for name in ("成就列表", "帝江号建设", "地区建设", "全服统计"):
+            self.assertEqual(logic.parse_command(name), logic.Command(name))
+            self.assertEqual(logic.action_of(logic.Command(name)), "query")
+
+    def test_format_2b(self):
+        achievements = logic.format_achievements(
+            {"achievements": [{"name": "A", "completed": True}, {"name": "B"}]}
+        )
+        self.assertIn("已完成 1/2", achievements)
+        self.assertIn("A", achievements)
+
+        spaceship = logic.format_spaceship(
+            {"spaceship": {"level": 3, "power": 100, "modules": [{}, {}]}}
+        )
+        self.assertIn("等级 3", spaceship)
+        self.assertIn("电力 100", spaceship)
+        self.assertIn("模块 2", spaceship)
+
+        domain = logic.format_domain(
+            {"domain": {"level": 2, "money": 50, "settlements": [{}, {}]}}
+        )
+        self.assertIn("等级 2", domain)
+        self.assertIn("调度券 50", domain)
+        self.assertIn("聚落 2", domain)
+
+        global_stats = logic.format_global_stats(
+            {"stats": {"total_count": 10, "star6_count": 1}}
+        )
+        self.assertIn("全服统计", global_stats)
+        self.assertIn("总抽数 10", global_stats)
+
 
 if __name__ == "__main__":
     unittest.main()
