@@ -266,6 +266,11 @@ async def clear_parser_events(req: Request):
     try: return parser_settings.clear_events()
     except (OSError, ValueError): raise HTTPException(503, '解析日志无法清理')
 
+from endfield_panel import register as register_endfield
+
+register_endfield(app, authorized=authorized, mutate=mutate, root=ROOT)
+
+
 @app.get('/api/token')
 def token_usage(req: Request, days: int = 7):
     authorized(req)
