@@ -1,3 +1,4 @@
+import asyncio
 from itertools import chain
 from pathlib import Path
 
@@ -161,21 +162,45 @@ class MessageSender:
         这里负责：
         - 下载媒体
         - 转换为 AstrBot 消息组件
+
+        下载是**并发**的：内容一多，逐张 await 会把等待时间累加起来。这里先把
+        所有下载一起发出去，再按原顺序取结果 —— 顺序不变，总耗时从「各张之和」
+        降到「最慢的那一张」。
         """
         segs: list[BaseMessageComponent] = []
 
         # 卡片统一由 _send_preview_card 独立发送，这里不再插入，
         # 否则卡片会既单独发一条、又出现在合并转发里出现两次。
 
-        # 轻媒体处理
-        for cont in plan["light"]:
-            if isinstance(cont, TextContent):
-                if cont.text:
+        # 先把所有媒体的下载一起触发，后面只负责收结果
+        ordered: list[tuple[str, BaseMessageComponent, asyncio.Task | None]] = []
+        for kind in ("light", "heavy"):
+            for cont in plan[kind]:
+                if isinstance(cont, TextContent):
+                    ordered.append((kind, cont, None))
+                else:
+                    ordered.append((kind, cont, asyncio.ensure_future(cont.get_path())))
+
+        pending = [task for _, _, task in ordered if task is not None]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for kind, cont, task in ordered:
+            if task is None:
+                if isinstance(cont, TextContent) and cont.text:
                     segs.append(Plain(cont.text))
                 continue
 
             try:
-                path: Path = await cont.get_path()
+                path: Path = task.result()  # 已完成，异常在这里重新抛出
+            except (SizeLimitException, DurationLimitException) as exc:
+                if self.cfg.show_download_fail_tip:
+                    segs.append(Plain(
+                        "此项媒体超过时长限制"
+                        if isinstance(exc, DurationLimitException)
+                        else "此项媒体超过大小限制"
+                    ))
+                continue
             except (DownloadLimitException, ZeroSizeException):
                 continue
             except DownloadException:
@@ -193,26 +218,6 @@ class MessageSender:
                         segs.append(Plain(g.text))
                     if g.alt:
                         segs.append(Plain(g.alt))
-
-        # 重媒体处理
-        for cont in plan["heavy"]:
-            try:
-                path: Path = await cont.get_path()
-            except (SizeLimitException, DurationLimitException) as exc:
-                if self.cfg.show_download_fail_tip:
-                    message = (
-                        "此项媒体超过时长限制"
-                        if isinstance(exc, DurationLimitException)
-                        else "此项媒体超过大小限制"
-                    )
-                    segs.append(Plain(message))
-                continue
-            except DownloadException:
-                if self.cfg.show_download_fail_tip:
-                    segs.append(Plain("此项媒体下载失败"))
-                continue
-
-            match cont:
                 case VideoContent() | DynamicContent():
                     path = await transcode_video_audio_to_lc(path)
                     segs.append(self._video_from_path(path))
@@ -234,22 +239,17 @@ class MessageSender:
         force_merge: bool,
     ) -> list[BaseMessageComponent]:
         """
-        根据策略决定是否将消息段合并为转发节点
+        是否把消息段打包成合并转发。
 
-        合并后的消息结构：
-        - 每个原始消息段成为一个 Node
-        - 统一使用机器人自身身份
+        这里**不再**合并：实测 7 张原图 ≈ 20 MB，打包成一个
+        `send_group_forward_msg` 协议端要 45 秒才回，最后直接超时，
+        一条都发不出去（日志里是 `send_group_forward_msg timeout`）。
+        逐张发送的总耗时反而更短，也不会整批失败。
+
+        保留参数是为了不改调用方签名；真要恢复合并，把 `force_merge`
+        的判断加回来即可。
         """
-        if not force_merge or not segs:
-            return segs
-
-        nodes = Nodes([])
-        self_id = event.get_self_id()
-
-        for seg in segs:
-            nodes.nodes.append(Node(uin=self_id, name="解析器", content=[seg]))
-
-        return [nodes]
+        return segs
 
     @staticmethod
     def _build_text_fallback(result: ParseResult) -> list[BaseMessageComponent]:
@@ -296,7 +296,33 @@ class MessageSender:
         except Exception as e:
             seg_meta = self._collect_seg_meta(segs)
             logger.error(f"发送解析结果失败： error={e}, segments={seg_meta}")
+            # 整条发不出去时，图片单独再试一次：一次发一堆大图容易被协议端拒，
+            # 逐张发成功率高得多，也好过整批丢掉
+            recovered = await self._resend_images_one_by_one(event, segs)
+            return recovered
+
+    async def _resend_images_one_by_one(
+        self, event: AstrMessageEvent, segs: list[BaseMessageComponent]
+    ) -> bool:
+        """整条发送失败后的补救：把图片段一张一张发出去。
+
+        逐张发虽然会拆成多条消息，但至少图片能到群里；一次性发一堆大图
+        被协议端拒掉时，用户看到的就是「什么都没收到」。
+        """
+        images = [seg for seg in segs if isinstance(seg, Image)]
+        if not images:
             return False
+
+        sent = 0
+        for seg in images:
+            try:
+                await event.send(event.chain_result([seg]))
+                sent += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"单张补发失败：{type(exc).__name__}: {exc}")
+        if sent:
+            logger.info(f"整条发送失败，已逐张补发 {sent}/{len(images)} 张图片")
+        return sent > 0
 
     @staticmethod
     def _collect_seg_meta(segs: list[BaseMessageComponent]) -> list[dict[str, str]]:
