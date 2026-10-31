@@ -1,4 +1,5 @@
 import asyncio
+import math
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -71,11 +72,13 @@ class FontInfo:
 
     @lru_cache(maxsize=400)
     def get_char_width(self, char: str) -> int:
-        """获取字符宽度，使用缓存优化"""
-        # bbox = self.font.getbbox(char)
-        # width = int(bbox[2] - bbox[0])
-        # return width
-        return int(self.font.getlength(char))
+        """获取字符宽度，使用缓存优化。
+
+        **向上取整**，不能 `int()` 截断：英文长句子有 90 多个字符，每字符少算
+        不到 1px，累积下来就能差出 30px —— 折行判断以为还在 750 宽度内，实际
+        渲染超出卡片右边被裁掉（推特正文右侧被切就是这个原因）。
+        """
+        return math.ceil(self.font.getlength(char))
 
     def get_char_width_fast(self, char: str) -> int:
         """快速获取单个字符宽度"""
