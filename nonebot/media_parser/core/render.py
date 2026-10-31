@@ -105,6 +105,35 @@ class FontInfo:
         return total_width
 
 
+#: 英文排版里常见的「全角标点」→ 半角减号宽度版本。
+#: 这套中文字体把 ’ ‘ … — – · → 都按全角宽度排版（24px @ 字号 24，
+#: 而英文字母 e 只有 12.7px），英文推文里每个 `’` 都会撑出半个汉字的空白，
+#: 看着就是「英文间隔过大」。换成窄版本即可，视觉含义不变。
+_LATIN_PUNCT = str.maketrans({
+    "\u2018": "'",   # ‘
+    "\u2019": "'",   # ’
+    "\u201a": "'",   # ‚
+    "\u201c": '"',   # “
+    "\u201d": '"',   # ”
+    "\u201e": '"',   # „
+    "\u2026": "...", # …
+    "\u2014": "-",   # —
+    "\u2013": "-",   # –
+    "\u00b7": "-",   # ·
+    "\u2192": "->",  # →
+    "\u200b": "",    # 零宽空格
+})
+
+
+def _narrow_latin_punctuation(text: str) -> str:
+    """把英文排版标点换成窄字符，避免中文字体按全角渲染撑开空白。
+
+    只做替换，不改测量方式 —— 折行和绘制拿的是同一份文本，
+    所以不会出现「按窄的算、按宽的画」那种错位。
+    """
+    return text.translate(_LATIN_PUNCT)
+
+
 @dataclass(eq=False, frozen=True, slots=True)
 class FontSet:
     """字体集数据类"""
@@ -1364,6 +1393,7 @@ class Renderer:
         if not text:
             return []
 
+        text = _narrow_latin_punctuation(text)
         lines: list[str] = []
         paragraphs = text.splitlines()
 
@@ -1382,6 +1412,20 @@ class Renderer:
             current_line_width = 0
             remaining_text = paragraph
 
+            def flush_at_space(line: str, rest: str) -> tuple[str, str]:
+                """英文按空格断词：把行尾那个半截单词挪到下一行开头。
+
+                纯逐字符折行会把 `subscriber` 劈成 `su` / `bscriber`，
+                英文内容读起来很难受。行尾还有空格时（说明这些是完整单词），
+                取最后一个空格之前的部分作为本行，其余留给下一行。
+                """
+                if " " not in line:
+                    return line, rest
+                head, _, tail = line.rpartition(" ")
+                if not head.strip() or not tail:
+                    return line, rest
+                return head, tail + rest
+
             while remaining_text:
                 next_char = remaining_text[0]
                 char_width = font_info.get_char_width_fast(next_char)
@@ -1392,15 +1436,20 @@ class Renderer:
                     remaining_text = remaining_text[1:]
                     continue
 
-                # 如果是标点符号，直接添加到当前行（标点符号不应该单独成行）
+                # 标点不能出现在行首：宽度允许就跟着走，
+                # 不允许也宁可让它压出边界一点，别单独成行。
                 if is_punctuation(next_char):
                     current_line += next_char
                     current_line_width += char_width
                     remaining_text = remaining_text[1:]
                     continue
 
-                # 测试添加下一个字符后的宽度
+                # 测试添加下一个字符后的宽度；若下一个是标点，把它一起算进来
+                # —— 标点不能落在行首，否则会压出卡片边界。
                 test_width = current_line_width + char_width
+                tail_char = remaining_text[1] if len(remaining_text) > 1 else ""
+                if tail_char and is_punctuation(tail_char):
+                    test_width += font_info.get_char_width_fast(tail_char)
 
                 if test_width <= max_width:
                     # 宽度合适，继续添加
@@ -1408,7 +1457,14 @@ class Renderer:
                     current_line_width = test_width
                     remaining_text = remaining_text[1:]
                 else:
-                    # 宽度超限，需要断行
+                    # 宽度超限，需要断行：先试按空格断，能断就断在词边界
+                    line, rest = flush_at_space(current_line, remaining_text)
+                    if line != current_line:
+                        lines.append(line)
+                        current_line = ""
+                        current_line_width = 0
+                        remaining_text = rest
+                        continue
                     lines.append(current_line)
                     current_line = next_char
                     current_line_width = char_width
