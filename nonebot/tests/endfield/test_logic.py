@@ -253,6 +253,49 @@ class EndfieldLogicTest(unittest.TestCase):
         self.assertIn("全服统计", global_stats)
         self.assertIn("总抽数 10", global_stats)
 
+    def test_parse_subscription_commands(self):
+        for name in (
+            "订阅公告",
+            "取消订阅公告",
+            "订阅理智",
+            "取消订阅理智",
+            "订阅调度券",
+            "取消订阅调度券",
+            "订阅签到",
+            "取消订阅签到",
+            "订阅列表",
+        ):
+            self.assertEqual(logic.parse_command(name), logic.Command(name))
+            self.assertEqual(logic.action_of(logic.Command(name)), "subscribe")
+        self.assertEqual(logic.parse_command("公告"), logic.Command("公告"))
+        self.assertEqual(logic.parse_command("公告最新"), logic.Command("公告最新"))
+        self.assertEqual(logic.action_of(logic.Command("公告")), "query")
+
+    def test_format_announcements_and_subscriptions(self):
+        latest = logic.format_announcement_latest(
+            {
+                "title": "公告A",
+                "summary": "摘要",
+                "published_at_ts": 1700000000,
+            }
+        )
+        self.assertIn("公告A", latest)
+        self.assertIn("摘要", latest)
+        listing = logic.format_announcement_list(
+            {"items": [{"title": "公告B", "published_at_ts": 1700000000}]}
+        )
+        self.assertIn("公告B", listing)
+        subscriptions = logic.format_subscription_list(
+            {"enabled": True},
+            {"enabled": False},
+            None,
+            announcements={"123": {"enabled": True}},
+        )
+        self.assertIn("理智：开", subscriptions)
+        self.assertIn("调度券：关", subscriptions)
+        self.assertIn("自动签到：关", subscriptions)
+        self.assertIn("公告群：123", subscriptions)
+
 
 if __name__ == "__main__":
     unittest.main()

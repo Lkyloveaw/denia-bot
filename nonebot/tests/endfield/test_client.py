@@ -325,6 +325,24 @@ class EndfieldClientTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen[0][2], "token")
         self.assertIsNone(seen[3][2], "全服统计是公开端点，不带用户 token")
 
+    async def test_announcement_list_and_detail(self):
+        seen = []
+
+        def handler(request):
+            seen.append((request.url.path, dict(request.url.params)))
+            return httpx.Response(200, json={"code": 0, "data": {"items": []}})
+
+        client = self._make(handler)
+        await client.get_announcements(page=2, page_size=5)
+        await client.get_announcement_detail("item-1")
+        self.assertEqual(
+            seen,
+            [
+                ("/api/announcements", {"page": "2", "page_size": "5"}),
+                ("/api/announcements/item-1", {}),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -328,6 +328,20 @@ class EndfieldClient:
         data = await self._request("GET", "/api/announcements/latest")
         return data if isinstance(data, dict) else {}
 
+    async def get_announcements(
+        self, *, page: int = 1, page_size: int = 20
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/announcements",
+            params={"page": max(1, int(page)), "page_size": min(50, max(1, int(page_size)))},
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_announcement_detail(self, item_id: str) -> dict[str, Any]:
+        data = await self._request("GET", f"/api/announcements/{item_id}")
+        return data if isinstance(data, dict) else {}
+
     async def get_gacha_records(
         self,
         framework_token: str,

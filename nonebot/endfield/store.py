@@ -445,6 +445,17 @@ class SubscriptionStore:
                 for name in sorted(PERSONAL_KINDS)
             }
 
+    async def update_personal(
+        self, kind: str, qq: str | int, **fields: Any
+    ) -> dict[str, Any]:
+        if kind not in PERSONAL_KINDS:
+            raise StoreError(f"unknown subscription kind: {kind}")
+        async with self._lock:
+            item = self._require_personal(kind, qq)
+            item.update(fields)
+            await self._save()
+            return copy.deepcopy(item)
+
     async def update_last_notified(
         self, kind: str, qq: str | int, value: int
     ) -> dict[str, Any]:

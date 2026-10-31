@@ -151,6 +151,18 @@ def test_2b_commands_match():
     assert endfield._rule(group_event("全服统计", at_self=True)) is True
 
 
+def test_subscription_and_announcement_commands_match():
+    for text in ("订阅理智", "取消订阅理智", "订阅列表", "订阅公告", "取消订阅公告"):
+        assert endfield._rule(private_event(text)) is True
+    assert endfield._rule(group_event("订阅公告")) is False
+    assert endfield._rule(group_event("订阅公告", at_self=True)) is True
+    assert "订阅公告" in endfield.logic.SUB_GROUP_COMMANDS
+    assert "订阅理智" in endfield.logic.SUB_PRIVATE_COMMANDS
+    assert endfield._rule(private_event("公告")) is True
+    assert endfield._rule(private_event("公告最新")) is True
+    assert "公告" in endfield.CARD_COMMANDS
+
+
 def test_2a_payload_helpers():
     row = endfield._find_char(
         [{"name_cn": "陈", "template_id": "tpl-1"}], "陈"

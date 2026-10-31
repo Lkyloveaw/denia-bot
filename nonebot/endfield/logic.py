@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Mapping, Sequence, TypeVar
 
 T = TypeVar("T")
@@ -94,7 +94,20 @@ BINDING_COMMANDS = frozenset(
     {"授权登陆", "扫码绑定", "绑定列表", "切换绑定", "删除绑定"}
 )
 SYNC_COMMANDS = frozenset({"同步抽卡", "同步面板"})
-PRIVATE_COMMANDS = BINDING_COMMANDS | SYNC_COMMANDS
+SUB_PRIVATE_COMMANDS = frozenset(
+    {
+        "订阅理智",
+        "取消订阅理智",
+        "订阅调度券",
+        "取消订阅调度券",
+        "订阅签到",
+        "取消订阅签到",
+        "订阅列表",
+    }
+)
+SUB_GROUP_COMMANDS = frozenset({"订阅公告", "取消订阅公告"})
+SUBSCRIPTION_COMMANDS = SUB_PRIVATE_COMMANDS | SUB_GROUP_COMMANDS
+PRIVATE_COMMANDS = BINDING_COMMANDS | SYNC_COMMANDS | SUB_PRIVATE_COMMANDS
 QUERY_COMMANDS = frozenset(
     {
         "便签",
@@ -110,9 +123,11 @@ QUERY_COMMANDS = frozenset(
         "帝江号建设",
         "地区建设",
         "全服统计",
+        "公告",
+        "公告最新",
     }
 )
-ALL_COMMANDS = PRIVATE_COMMANDS | QUERY_COMMANDS
+ALL_COMMANDS = PRIVATE_COMMANDS | QUERY_COMMANDS | SUB_GROUP_COMMANDS
 
 
 @dataclass(frozen=True)
@@ -137,6 +152,17 @@ def parse_command(text: Any) -> Command | None:
         "帝江号建设",
         "地区建设",
         "全服统计",
+        "公告",
+        "公告最新",
+        "订阅公告",
+        "取消订阅公告",
+        "订阅理智",
+        "取消订阅理智",
+        "订阅调度券",
+        "取消订阅调度券",
+        "订阅签到",
+        "取消订阅签到",
+        "订阅列表",
         "同步抽卡",
         "同步面板",
     }:
@@ -175,6 +201,8 @@ def action_of(command: Command) -> str:
         return "delete"
     if command.name in SYNC_COMMANDS:
         return "sync"
+    if command.name in SUBSCRIPTION_COMMANDS:
+        return "subscribe"
     if command.name in BINDING_COMMANDS:
         return "bind"
     return "query"
@@ -431,6 +459,70 @@ def format_global_stats(data: Any) -> str:
     if text.startswith("暂无"):
         return "暂无全服统计。"
     return text.replace("抽卡分析：", "全服统计：", 1)
+
+
+def format_announcement_latest(data: Any) -> str:
+    payload = _mapping(data.get("announcement") if isinstance(data, Mapping) else data)
+    payload = payload or _mapping(data)
+    title = payload.get("title") or "终末地公告"
+    summary = str(payload.get("summary") or "").strip()
+    published = _format_ts(payload.get("published_at_ts"))
+    lines = [f"【终末地公告】{title}"]
+    if published:
+        lines.append(published)
+    if summary:
+        lines.append(summary[:800])
+    return "\n".join(lines)
+
+
+def format_announcement_list(data: Any) -> str:
+    payload = _mapping(data)
+    items = (
+        payload.get("items")
+        or payload.get("list")
+        or payload.get("announcements")
+        or []
+    )
+    if not isinstance(items, list) or not items:
+        return "暂无公告。"
+    lines = ["公告列表："]
+    for index, item in enumerate(items[:10], 1):
+        row = _mapping(item)
+        title = row.get("title") or "未命名公告"
+        published = _format_ts(row.get("published_at_ts"))
+        lines.append(f"{index}. {title}{(' | ' + published) if published else ''}")
+    return "\n".join(lines)
+
+
+def format_subscription_list(
+    sanity: Any,
+    tickets: Any,
+    signin: Any,
+    *,
+    announcements: Any = None,
+) -> str:
+    def state(value: Any) -> str:
+        return "开" if isinstance(value, Mapping) and value.get("enabled") else "关"
+
+    lines = [
+        "订阅列表：",
+        f"理智：{state(sanity)}",
+        f"调度券：{state(tickets)}",
+        f"自动签到：{state(signin)}",
+    ]
+    if isinstance(announcements, Mapping) and announcements:
+        groups = [str(key) for key, value in announcements.items() if isinstance(value, Mapping) and value.get("enabled")]
+        lines.append("公告群：" + ("、".join(groups) if groups else "关"))
+    else:
+        lines.append("公告群：关")
+    return "\n".join(lines)
+
+
+def _format_ts(value: Any) -> str:
+    try:
+        return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError, OSError):
+        return str(value or "")
 
 
 def format_sync_status(data: Any) -> str:

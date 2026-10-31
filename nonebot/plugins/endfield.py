@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
+import nonebot
 from nonebot import get_driver, on_message
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -31,6 +32,7 @@ try:
     from endfield import config as ecfg
     from endfield import logic
     from endfield import render as er
+    from endfield import scheduler as esched
     from endfield import store as estore
 except ImportError:  # 不是从 nonebot\ 启动
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -39,6 +41,7 @@ except ImportError:  # 不是从 nonebot\ 启动
     from endfield import config as ecfg
     from endfield import logic
     from endfield import render as er
+    from endfield import scheduler as esched
     from endfield import store as estore
 
 __plugin_meta__ = PluginMetadata(
@@ -53,6 +56,8 @@ DATA_DIR = BASE_DIR / "data" / "endfield"
 CONFIG_PATH = BASE_DIR / "data" / "endfield.json"
 SECRETS_PATH = BASE_DIR / "data" / "endfield_secrets.json"
 BINDINGS_PATH = DATA_DIR / "bindings.json"
+SUBSCRIPTIONS_PATH = DATA_DIR / "subscriptions.json"
+HEARTBEAT_PATH = DATA_DIR / "heartbeat.json"
 
 _gate = logic.UserGate()
 _pending_consent: set[str] = set()
@@ -70,6 +75,8 @@ CARD_COMMANDS = {
     "帝江号建设",
     "地区建设",
     "全服统计",
+    "公告",
+    "公告最新",
 }
 
 
@@ -137,6 +144,73 @@ def _client(event: MessageEvent, qq: str) -> ec.EndfieldClient:
 
 def _store() -> estore.BindingStore:
     return estore.BindingStore(BINDINGS_PATH)
+
+
+class OneBotPushSink:
+    async def private(self, qq: str, text: str) -> bool:
+        bot = _first_bot()
+        if bot is None:
+            return False
+        try:
+            await bot.send_private_msg(user_id=int(qq), message=text)
+            return True
+        except Exception:
+            return False
+
+    async def group(self, group_id: str, text: str) -> bool:
+        bot = _first_bot()
+        if bot is None:
+            return False
+        try:
+            await bot.send_group_msg(group_id=int(group_id), message=text)
+            return True
+        except Exception:
+            return False
+
+
+def _first_bot():
+    bots = nonebot.get_bots()
+    return next(iter(bots.values()), None)
+
+
+def _scheduler_client(qq: str) -> ec.EndfieldClient | None:
+    key = _api_key()
+    if not key:
+        return None
+    return ec.EndfieldClient(
+        key,
+        base_url=os.environ.get("ENDFIELD_BASE_URL") or ec.BASE_URL,
+        user_qq=str(qq),
+    )
+
+
+_scheduler_task: asyncio.Task | None = None
+
+
+@driver.on_startup
+async def _start_endfield_scheduler() -> None:
+    global _scheduler_task
+    if _scheduler_task is not None and not _scheduler_task.done():
+        return
+    if not _config().enabled or not _api_key():
+        return
+    scheduler = esched.EndfieldScheduler(
+        bindings=estore.BindingStore(BINDINGS_PATH),
+        subscriptions=estore.SubscriptionStore(SUBSCRIPTIONS_PATH),
+        client_factory=_scheduler_client,
+        sink=OneBotPushSink(),
+        config_provider=_config,
+        heartbeat_path=HEARTBEAT_PATH,
+    )
+    _scheduler_task = asyncio.create_task(scheduler.run_forever(60))
+
+
+@driver.on_shutdown
+async def _stop_endfield_scheduler() -> None:
+    global _scheduler_task
+    if _scheduler_task is not None:
+        _scheduler_task.cancel()
+        _scheduler_task = None
 
 
 def _binding_from_payload(data: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -314,18 +388,22 @@ def _pick_contract(detail: Mapping[str, Any], desired: str = "") -> dict[str, An
 
 
 async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) -> None:
-    if command.name in {"日历", "全服统计"}:
+    if command.name in {"日历", "全服统计", "公告", "公告最新"}:
         client = _client(event, qq)
         try:
             if command.name == "日历":
                 data = await client.get_wiki_activities()
                 text = logic.format_calendar(data)
-                title = "活动日历"
-            else:
+            elif command.name == "全服统计":
                 data = await client.get_global_stats()
                 text = logic.format_global_stats(data)
-                title = "全服统计"
-            await _send_card(event, title, text)
+            elif command.name == "公告最新":
+                data = await client.get_announcement_latest()
+                text = logic.format_announcement_latest(data)
+            else:
+                data = await client.get_announcements(page=1, page_size=5)
+                text = logic.format_announcement_list(data)
+            await _send_card(event, command.name, text)
         except ec.EndfieldConfigError:
             await _send(event, logic.error_text("config"))
         except ec.EndfieldRateLimitError:
@@ -518,6 +596,87 @@ async def _handle_binding(event: MessageEvent, qq: str, command: logic.Command) 
             await _send(event, "没有这个绑定；发送「绑定列表」查看序号。")
 
 
+KIND_BY_COMMAND = {
+    "订阅理智": "sanity",
+    "取消订阅理智": "sanity",
+    "订阅调度券": "tickets",
+    "取消订阅调度券": "tickets",
+    "订阅签到": "signin",
+    "取消订阅签到": "signin",
+}
+
+
+async def _handle_subscription(
+    event: MessageEvent, qq: str, command: logic.Command
+) -> None:
+    store = _store()
+    subscriptions = estore.SubscriptionStore(SUBSCRIPTIONS_PATH)
+    if command.name in logic.SUB_GROUP_COMMANDS:
+        if not _is_group(event):
+            await _send(event, "公告订阅请在群聊中使用。")
+            return
+        if qq not in _superusers():
+            await _send(event, "只有主人可以订阅/取消群公告。")
+            return
+        group_id = str(getattr(event, "group_id", "") or "")
+        if command.name == "订阅公告":
+            since_ts = 0
+            last_item_id = ""
+            client = _client(event, qq)
+            try:
+                latest = await client.get_announcement_latest()
+                since_ts = int(latest.get("published_at_ts") or 0)
+                last_item_id = str(latest.get("item_id") or "")
+            except ec.EndfieldError:
+                await _send(event, "读取最新公告失败，请稍后再试。")
+                return
+            finally:
+                await client.close()
+            await subscriptions.add_announcement(
+                group_id,
+                qq,
+                since_ts=since_ts,
+                last_item_id=last_item_id,
+            )
+            await _send(event, "已订阅本群公告推送。")
+        else:
+            await subscriptions.remove_announcement(group_id)
+            await _send(event, "已取消本群公告推送。")
+        return
+
+    if command.name == "订阅列表":
+        personal = await subscriptions.list_personal()
+        announcements = (
+            await subscriptions.list_announcements()
+            if qq in _superusers()
+            else None
+        )
+        await _send(
+            event,
+            logic.format_subscription_list(
+                personal.get("sanity", {}).get(qq),
+                personal.get("tickets", {}).get(qq),
+                personal.get("signin", {}).get(qq),
+                announcements=announcements,
+            ),
+        )
+        return
+
+    kind = KIND_BY_COMMAND.get(command.name)
+    if kind is None:
+        return
+    if command.name.startswith("订阅"):
+        binding = await store.get_primary(qq)
+        if not binding:
+            await _send(event, logic.error_text("no_binding"))
+            return
+        await subscriptions.set_personal(kind, qq)
+        await _send(event, "已订阅。")
+    else:
+        await subscriptions.remove_personal(kind, qq)
+        await _send(event, "已取消订阅。")
+
+
 @matcher.handle()
 async def _handle_endfield(event: MessageEvent) -> None:
     qq = str(event.get_user_id())
@@ -529,7 +688,10 @@ async def _handle_endfield(event: MessageEvent) -> None:
         return
 
     if _is_group(event) and command.name in PRIVATE_ONLY:
-        await _send(event, "绑定/同步/账号管理请私聊我。")
+        await _send(event, "绑定/同步/账号管理/个人订阅请私聊我。")
+        return
+    if not _is_group(event) and command.name in logic.SUB_GROUP_COMMANDS:
+        await _send(event, "公告订阅请在群聊中使用。")
         return
 
     allowed, reason = _gate.check(
@@ -545,6 +707,8 @@ async def _handle_endfield(event: MessageEvent) -> None:
         await _handle_auth(event, qq)
     elif command.name == "扫码绑定":
         await _send(event, "扫码绑定将在二期实现；请先使用「授权登陆」。")
+    elif command.name in logic.SUBSCRIPTION_COMMANDS:
+        await _handle_subscription(event, qq, command)
     elif command.name in logic.SYNC_COMMANDS:
         await _handle_sync(event, qq, command)
     elif command.name in logic.QUERY_COMMANDS:
