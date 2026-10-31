@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -52,7 +53,7 @@ _gate = logic.UserGate()
 _pending_consent: set[str] = set()
 _pending_auth: dict[str, str] = {}
 
-BINDING_ONLY = {"授权登陆", "扫码绑定", "绑定列表", "切换绑定", "删除绑定"}
+PRIVATE_ONLY = set(logic.PRIVATE_COMMANDS)
 
 
 def _superusers() -> set[str]:
@@ -231,7 +232,67 @@ async def _handle_auth(event: MessageEvent, qq: str) -> None:
         await client.close()
 
 
+def _find_char(rows: Any, name: str) -> dict[str, Any] | None:
+    wanted = str(name or "").strip().lower()
+    if not wanted or not isinstance(rows, list):
+        return None
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        candidates = [
+            row.get("name_cn"),
+            row.get("name"),
+            row.get("alias"),
+            row.get("char_name"),
+        ]
+        if any(str(item or "").strip().lower() == wanted for item in candidates):
+            return dict(row)
+    return None
+
+
+def _pick_contract(detail: Mapping[str, Any], desired: str = "") -> dict[str, Any] | None:
+    payload = (
+        detail.get("crisisContract")
+        or detail.get("crisis_contract")
+        or detail.get("contracts")
+        or []
+    )
+    if isinstance(payload, Mapping):
+        rows = [dict(payload)]
+    elif isinstance(payload, list):
+        rows = [dict(item) for item in payload if isinstance(item, Mapping)]
+    else:
+        rows = []
+    if desired:
+        for row in rows:
+            if desired in {
+                str(row.get("name") or ""),
+                str(row.get("id") or ""),
+                str(row.get("contract_id") or ""),
+                str(row.get("contractId") or ""),
+            }:
+                return row
+    return rows[0] if rows else None
+
+
 async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) -> None:
+    if command.name == "日历":
+        client = _client(event, qq)
+        try:
+            data = await client.get_wiki_activities()
+            await _send(event, logic.format_calendar(data))
+        except ec.EndfieldConfigError:
+            await _send(event, logic.error_text("config"))
+        except ec.EndfieldRateLimitError:
+            await _send(event, logic.error_text("rate_limit"))
+        except ec.EndfieldTransientError:
+            await _send(event, logic.error_text("timeout"))
+        except ec.EndfieldProtocolError:
+            await _send(event, "日历查询失败，请稍后再试。")
+        finally:
+            await client.close()
+        return
+
     store = _store()
     binding = await store.get_primary(qq)
     if not binding:
@@ -251,9 +312,62 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
         elif command.name == "理智":
             data = await client.get_stamina(token, role_id, server_id)
             text = logic.format_stamina(data)
-        else:
+        elif command.name == "签到":
             data = await client.post_attendance(token, role_id, server_id)
             text = logic.format_attendance(data)
+        elif command.name == "抽卡记录":
+            page = int(command.arg or 1)
+            data = await client.get_gacha_records(token, page=page, limit=20)
+            text = logic.format_gacha_records(
+                data, page=int(data.get("page") or page)
+            )
+        elif command.name == "抽卡分析":
+            data = await client.get_gacha_stats(token)
+            text = logic.format_gacha_stats(data)
+        elif command.name == "干员列表":
+            page = int(command.arg or 1)
+            data = await client.get_panel_chars(token, page=page, page_size=20)
+            text = logic.format_operator_list(
+                data, page=int(data.get("page") or page)
+            )
+        elif command.name == "干员面板":
+            rows = await client.get_panel_chars_all(token)
+            row = _find_char(rows, command.arg)
+            if row is None:
+                await _send(event, f"没有找到干员「{command.arg}」；可先发送「同步面板」。")
+                return
+            template_id = (
+                row.get("template_id")
+                or row.get("templateId")
+                or row.get("char_id")
+                or row.get("charId")
+            )
+            if not template_id:
+                await _send(event, "该干员缺少模板 ID，暂不能查看面板。")
+                return
+            data = await client.get_panel_char(token, str(template_id))
+            text = logic.format_operator_panel(data, name=command.arg)
+        elif command.name == "危机合约":
+            detail = await client.get_card_detail(token, role_id, server_id)
+            contract = _pick_contract(detail, command.arg)
+            if contract is None:
+                await _send(event, "当前没有可用的危机合约数据。")
+                return
+            contract_id = (
+                contract.get("contract_id")
+                or contract.get("contractId")
+                or contract.get("id")
+            )
+            if not contract_id:
+                await _send(event, "危机合约缺少 ID，暂不能查询。")
+                return
+            data = await client.get_crisis_contract(
+                token, str(contract_id), role_id=role_id, server_id=server_id
+            )
+            text = logic.format_crisis_contract(data, contract=contract)
+        else:
+            await _send(event, "暂不支持该查询。")
+            return
         await _send(event, text)
     except ec.EndfieldAuthError as exc:
         await store.mark_invalid(qq, role_id, str(exc.code or exc.status or "auth"))
@@ -266,6 +380,62 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
         await _send(event, logic.error_text("timeout"))
     except ec.EndfieldProtocolError:
         await _send(event, "查询失败，请稍后再试。")
+    finally:
+        await client.close()
+
+
+async def _poll_sync(fn: Any, token: str, *, attempts: int = 15) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    for _ in range(attempts):
+        data = await fn(token)
+        status = str(data.get("status") or "").lower()
+        if status in {"completed", "success", "done", "failed", "error", "conflict"}:
+            return data
+        await asyncio.sleep(2.0)
+    return data
+
+
+async def _handle_sync(event: MessageEvent, qq: str, command: logic.Command) -> None:
+    store = _store()
+    binding = await store.get_primary(qq)
+    if not binding:
+        await _send(event, logic.error_text("no_binding"))
+        return
+    if binding.get("status") != "valid":
+        await _send(event, logic.error_text("invalid_binding"))
+        return
+    client = _client(event, qq)
+    token = str(binding.get("framework_token") or "")
+    role_id = str(binding.get("role_id") or "")
+    try:
+        if command.name == "同步抽卡":
+            started = await client.post_gacha_fetch(token, role_id)
+            status = str(started.get("status") or "").lower()
+            data = (
+                started
+                if status in {"completed", "success", "done", "failed", "error", "conflict"}
+                else await _poll_sync(client.get_gacha_sync_status, token)
+            )
+        else:
+            started = await client.sync_panel(token)
+            status = str(started.get("status") or "").lower()
+            data = (
+                started
+                if status in {"completed", "success", "done", "failed", "error", "conflict"}
+                else await _poll_sync(client.get_panel_sync_status, token)
+            )
+        await _send(event, logic.format_sync_status(data))
+    except ec.EndfieldAuthError as exc:
+        await store.mark_invalid(qq, role_id, str(exc.code or exc.status or "auth"))
+        await _send(event, logic.error_text("invalid_binding"))
+    except ec.EndfieldConfigError:
+        await _send(event, logic.error_text("config"))
+    except ec.EndfieldRateLimitError:
+        await _send(event, logic.error_text("rate_limit"))
+    except ec.EndfieldTransientError:
+        await _send(event, logic.error_text("timeout"))
+    except ec.EndfieldProtocolError:
+        await _send(event, "同步失败，请稍后再试。")
     finally:
         await client.close()
 
@@ -301,8 +471,8 @@ async def _handle_endfield(event: MessageEvent) -> None:
     if command is None:
         return
 
-    if _is_group(event) and command.name in BINDING_ONLY:
-        await _send(event, "绑定/账号管理请私聊我。")
+    if _is_group(event) and command.name in PRIVATE_ONLY:
+        await _send(event, "绑定/同步/账号管理请私聊我。")
         return
 
     allowed, reason = _gate.check(
@@ -318,6 +488,8 @@ async def _handle_endfield(event: MessageEvent) -> None:
         await _handle_auth(event, qq)
     elif command.name == "扫码绑定":
         await _send(event, "扫码绑定将在二期实现；请先使用「授权登陆」。")
+    elif command.name in logic.SYNC_COMMANDS:
+        await _handle_sync(event, qq, command)
     elif command.name in logic.QUERY_COMMANDS:
         await _handle_query(event, qq, command)
     else:

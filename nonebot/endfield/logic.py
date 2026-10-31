@@ -93,8 +93,22 @@ def error_text(kind: str) -> str:
 BINDING_COMMANDS = frozenset(
     {"授权登陆", "扫码绑定", "绑定列表", "切换绑定", "删除绑定"}
 )
-QUERY_COMMANDS = frozenset({"便签", "理智", "签到"})
-ALL_COMMANDS = BINDING_COMMANDS | QUERY_COMMANDS
+SYNC_COMMANDS = frozenset({"同步抽卡", "同步面板"})
+PRIVATE_COMMANDS = BINDING_COMMANDS | SYNC_COMMANDS
+QUERY_COMMANDS = frozenset(
+    {
+        "便签",
+        "理智",
+        "签到",
+        "抽卡记录",
+        "抽卡分析",
+        "干员列表",
+        "干员面板",
+        "危机合约",
+        "日历",
+    }
+)
+ALL_COMMANDS = PRIVATE_COMMANDS | QUERY_COMMANDS
 
 
 @dataclass(frozen=True)
@@ -104,16 +118,45 @@ class Command:
 
 
 def parse_command(text: Any) -> Command | None:
-    """精确解析一期命令；不带前缀，不做子串匹配。"""
+    """精确解析命令；不带前缀，不做子串匹配。"""
     raw = str(text or "").strip()
-    if raw in {"授权登陆", "扫码绑定", "便签", "理智", "签到", "绑定列表"}:
+    if raw in {
+        "授权登陆",
+        "扫码绑定",
+        "便签",
+        "理智",
+        "签到",
+        "绑定列表",
+        "抽卡分析",
+        "日历",
+        "同步抽卡",
+        "同步面板",
+    }:
         return Command(raw)
+    if raw == "危机合约":
+        return Command("危机合约")
+    if raw.startswith("危机合约 "):
+        arg = raw[len("危机合约 ") :].strip()
+        if 1 <= len(arg) <= 32:
+            return Command("危机合约", arg)
     for name in ("切换绑定", "删除绑定"):
         prefix = name + " "
         if raw.startswith(prefix):
             arg = raw[len(prefix) :].strip()
             if arg.isdigit() and 1 <= int(arg) <= 99:
                 return Command(name, arg)
+    for name in ("抽卡记录", "干员列表"):
+        if raw == name:
+            return Command(name)
+        prefix = name + " "
+        if raw.startswith(prefix):
+            arg = raw[len(prefix) :].strip()
+            if arg.isdigit() and 1 <= int(arg) <= 99:
+                return Command(name, arg)
+    if raw.startswith("干员面板 "):
+        arg = raw[len("干员面板 ") :].strip()
+        if arg:
+            return Command("干员面板", arg)
     return None
 
 
@@ -122,6 +165,8 @@ def action_of(command: Command) -> str:
         return "switch"
     if command.name == "删除绑定":
         return "delete"
+    if command.name in SYNC_COMMANDS:
+        return "sync"
     if command.name in BINDING_COMMANDS:
         return "bind"
     return "query"
@@ -183,6 +228,151 @@ def format_binding_list(items: Any) -> str:
     return "\n".join(lines)
 
 
+def format_gacha_records(data: Any, *, page: int = 1, pages: int = 1) -> str:
+    payload = _mapping(data)
+    records = payload.get("records") or []
+    try:
+        total_pages = int(payload.get("pages") or pages or 1)
+    except (TypeError, ValueError):
+        total_pages = 1
+    if not isinstance(records, list) or not records:
+        return "暂无抽卡记录；可私聊发送「同步抽卡」后再试。"
+    lines = [f"抽卡记录（第 {page}/{total_pages} 页）："]
+    for index, item in enumerate(records[:20], 1):
+        record = _mapping(item)
+        rarity = record.get("rarity") or record.get("star") or "?"
+        name = (
+            record.get("char_name")
+            or record.get("item_name")
+            or record.get("name")
+            or "未知"
+        )
+        pool = record.get("pool_name") or record.get("pool") or ""
+        suffix = f" | {pool}" if pool else ""
+        lines.append(f"{index}. ★{rarity} {name}{suffix}")
+    footer = format_page_footer(page, total_pages, "抽卡记录")
+    if footer:
+        lines.append(footer)
+    return "\n".join(lines)
+
+
+def format_gacha_stats(data: Any) -> str:
+    payload = _mapping(data)
+    stats = _mapping(payload.get("stats") or payload)
+    total = _first(stats, "total_count", "total", "count")
+    star6 = _first(stats, "star6_count", "six_star_count", "star_6")
+    rate = _first(stats, "star6_rate", "six_star_rate", "rate")
+    if total is None and star6 is None:
+        return "暂无抽卡分析；可私聊发送「同步抽卡」后再试。"
+    parts = [f"总抽数 {total if total is not None else '?'}"]
+    if star6 is not None:
+        parts.append(f"六星 {star6}")
+    if rate is not None:
+        parts.append(f"六星率 {rate}")
+    return "抽卡分析：" + " / ".join(parts)
+
+
+def format_operator_list(data: Any, *, page: int = 1, pages: int = 1) -> str:
+    payload = _mapping(data)
+    rows = payload.get("synced_chars") or payload.get("chars") or []
+    try:
+        total_pages = int(payload.get("pages") or pages or 1)
+    except (TypeError, ValueError):
+        total_pages = 1
+    if not isinstance(rows, list) or not rows:
+        return "暂无干员数据；可私聊发送「同步面板」后再试。"
+    lines = [f"干员列表（第 {page}/{total_pages} 页）："]
+    for index, item in enumerate(rows[:20], 1):
+        row = _mapping(item)
+        name = row.get("name_cn") or row.get("name") or "未知"
+        level = row.get("level") or row.get("lv") or "?"
+        elite = row.get("evolve_phase") or row.get("elite") or row.get("phase")
+        suffix = f" | 精英 {elite}" if elite is not None else ""
+        lines.append(f"{index}. {name} | Lv.{level}{suffix}")
+    footer = format_page_footer(page, total_pages, "干员列表")
+    if footer:
+        lines.append(footer)
+    return "\n".join(lines)
+
+
+def format_operator_panel(data: Any, *, name: str = "") -> str:
+    payload = _mapping(data)
+    panel = _mapping(payload.get("panel") or payload)
+    title = name or panel.get("name_cn") or panel.get("name") or "干员"
+    summary = _mapping(panel.get("summary") or panel.get("stats"))
+    parts: list[str] = []
+    for label, keys in (
+        ("等级", ("level", "lv")),
+        ("攻击", ("attack", "atk")),
+        ("防御", ("defense", "def")),
+        ("生命", ("hp", "health")),
+    ):
+        value = _first(summary, *keys) or _first(panel, *keys)
+        if value is not None:
+            parts.append(f"{label} {value}")
+    if not parts:
+        return f"{title}：已获取面板数据（字段待适配）。"
+    return f"{title}：" + " / ".join(parts)
+
+
+def format_crisis_contract(data: Any, *, contract: Any = None) -> str:
+    payload = _mapping(data)
+    crisis = _mapping(
+        payload.get("crisisContract")
+        or payload.get("crisis_contract")
+        or payload
+    )
+    contract_info = _mapping(contract)
+    name = (
+        crisis.get("name")
+        or crisis.get("title")
+        or contract_info.get("name")
+        or "危机合约"
+    )
+    score = _first(crisis, "score", "total_score", "point")
+    parts = [str(name)]
+    if score is not None:
+        parts.append(f"得分 {score}")
+    indicators = crisis.get("indicators") or crisis.get("indicator")
+    if isinstance(indicators, list) and indicators:
+        names = []
+        for item in indicators[:5]:
+            if isinstance(item, Mapping):
+                names.append(str(item.get("name") or item.get("title") or "指标"))
+            else:
+                names.append(str(item))
+        parts.append("指标：" + "、".join(names))
+    return "危机合约：" + " / ".join(parts)
+
+
+def format_calendar(data: Any) -> str:
+    payload = _mapping(data)
+    activities = payload.get("activities") or payload.get("list") or []
+    if not isinstance(activities, list) or not activities:
+        return "暂无活动日历数据。"
+    lines = ["活动日历："]
+    for item in activities[:10]:
+        row = _mapping(item)
+        name = row.get("name") or row.get("title") or "未命名活动"
+        start = row.get("activity_start_at_ts") or row.get("start_at_ts") or ""
+        end = row.get("activity_end_at_ts") or row.get("end_at_ts") or ""
+        window = f"（{start} - {end}）" if start or end else ""
+        lines.append(f"- {name}{window}")
+    return "\n".join(lines)
+
+
+def format_sync_status(data: Any) -> str:
+    payload = _mapping(data)
+    status = str(payload.get("status") or "")
+    if status in {"completed", "success", "done"}:
+        return f"同步完成，新增 {payload.get('new_records', 0)} 条。"
+    if status in {"failed", "error"}:
+        return f"同步失败：{payload.get('error') or '未知错误'}"
+    if status in {"conflict", "running"}:
+        return "服务器正在同步，请稍后再查。"
+    return "同步已提交，请稍后再查。"
+
+
 def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
@@ -205,6 +395,7 @@ class UserGate:
         bind_limit: int = 3,
         switch_limit: int = 10,
         delete_limit: int = 20,
+        sync_limit: int = 1,
     ):
         self.debounce_seconds = float(debounce_seconds)
         self.limits = {
@@ -212,6 +403,7 @@ class UserGate:
             "bind": int(bind_limit),
             "switch": int(switch_limit),
             "delete": int(delete_limit),
+            "sync": int(sync_limit),
         }
         self._last: dict[str, float] = {}
         self._counts: dict[tuple[str, str, str], int] = {}

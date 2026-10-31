@@ -127,3 +127,33 @@ def test_status_approved():
     assert endfield._status_approved({"status": "approved"})
     assert endfield._status_approved({"approved": True})
     assert not endfield._status_approved({"status": "pending"})
+
+
+def test_2a_commands_match():
+    assert endfield._rule(private_event("抽卡记录 2")) is True
+    assert endfield._rule(private_event("抽卡分析")) is True
+    assert endfield._rule(private_event("干员列表 3")) is True
+    assert endfield._rule(private_event("干员面板 陈")) is True
+    assert endfield._rule(private_event("危机合约")) is True
+    assert endfield._rule(private_event("日历")) is True
+    assert endfield._rule(private_event("同步抽卡")) is True
+    assert endfield._rule(private_event("同步面板")) is True
+    assert endfield._rule(group_event("日历")) is False
+    assert endfield._rule(group_event("日历", at_self=True)) is True
+    assert "同步抽卡" in endfield.logic.PRIVATE_COMMANDS
+
+
+def test_2a_payload_helpers():
+    row = endfield._find_char(
+        [{"name_cn": "陈", "template_id": "tpl-1"}], "陈"
+    )
+    assert row is not None
+    assert row["template_id"] == "tpl-1"
+    assert endfield._find_char([{"name_cn": "陈"}], "银灰") is None
+
+    contract = endfield._pick_contract(
+        {"crisisContract": [{"name": "净罪", "id": "c-1"}]}, "净罪"
+    )
+    assert contract is not None
+    assert contract["id"] == "c-1"
+    assert endfield._pick_contract({"crisisContract": []}) is None

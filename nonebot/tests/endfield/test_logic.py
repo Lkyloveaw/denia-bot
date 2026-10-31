@@ -132,6 +132,95 @@ class EndfieldLogicTest(unittest.TestCase):
         ok, _ = gate.check("1", "query", now=200, day="2026-10-31", is_superuser=True)
         self.assertTrue(ok, "主人豁免")
 
+    def test_parse_2a_commands(self):
+        self.assertEqual(logic.parse_command("抽卡记录"), logic.Command("抽卡记录"))
+        self.assertEqual(
+            logic.parse_command("抽卡记录 2"), logic.Command("抽卡记录", "2")
+        )
+        self.assertEqual(logic.parse_command("抽卡分析"), logic.Command("抽卡分析"))
+        self.assertEqual(
+            logic.parse_command("干员列表 3"), logic.Command("干员列表", "3")
+        )
+        self.assertEqual(
+            logic.parse_command("干员面板 陈"), logic.Command("干员面板", "陈")
+        )
+        self.assertEqual(logic.parse_command("危机合约"), logic.Command("危机合约"))
+        self.assertEqual(
+            logic.parse_command("危机合约 净罪"), logic.Command("危机合约", "净罪")
+        )
+        self.assertEqual(logic.parse_command("日历"), logic.Command("日历"))
+        self.assertEqual(logic.parse_command("同步抽卡"), logic.Command("同步抽卡"))
+        self.assertEqual(logic.parse_command("同步面板"), logic.Command("同步面板"))
+        self.assertIsNone(logic.parse_command("抽卡记录 abc"))
+        self.assertIsNone(logic.parse_command("干员面板"))
+
+    def test_action_of_2a(self):
+        self.assertEqual(logic.action_of(logic.Command("抽卡记录")), "query")
+        self.assertEqual(logic.action_of(logic.Command("日历")), "query")
+        self.assertEqual(logic.action_of(logic.Command("同步抽卡")), "sync")
+
+    def test_format_gacha_records_and_stats(self):
+        records = logic.format_gacha_records(
+            {
+                "records": [
+                    {"rarity": 6, "char_name": "陈", "pool_name": "限定寻访"}
+                ],
+                "pages": 2,
+            },
+            page=1,
+        )
+        self.assertIn("★6", records)
+        self.assertIn("陈", records)
+        self.assertIn("第 1/2 页", records)
+        stats = logic.format_gacha_stats(
+            {"stats": {"total_count": 100, "star6_count": 2}}
+        )
+        self.assertIn("总抽数 100", stats)
+        self.assertIn("六星 2", stats)
+
+    def test_format_operator_list_and_panel(self):
+        listing = logic.format_operator_list(
+            {
+                "synced_chars": [
+                    {"name_cn": "陈", "level": 90, "evolve_phase": 2}
+                ],
+                "pages": 1,
+            }
+        )
+        self.assertIn("陈", listing)
+        self.assertIn("Lv.90", listing)
+        panel = logic.format_operator_panel(
+            {"panel": {"name_cn": "陈", "summary": {"level": 90, "attack": 1000}}}
+        )
+        self.assertIn("陈", panel)
+        self.assertIn("攻击 1000", panel)
+
+    def test_format_crisis_calendar_sync(self):
+        crisis = logic.format_crisis_contract(
+            {
+                "crisisContract": {
+                    "name": "净罪",
+                    "score": 100,
+                    "indicators": [{"name": "目标：+1"}],
+                }
+            }
+        )
+        self.assertIn("净罪", crisis)
+        self.assertIn("得分 100", crisis)
+        calendar = logic.format_calendar(
+            {"activities": [{"name": "活动A", "activity_start_at_ts": 1, "activity_end_at_ts": 2}]}
+        )
+        self.assertIn("活动A", calendar)
+        sync = logic.format_sync_status({"status": "completed", "new_records": 5})
+        self.assertIn("新增 5", sync)
+
+    def test_sync_quota(self):
+        gate = logic.UserGate(debounce_seconds=0, sync_limit=1)
+        ok, _ = gate.check("1", "sync", now=100, day="2026-10-31")
+        self.assertTrue(ok)
+        ok, _ = gate.check("1", "sync", now=101, day="2026-10-31")
+        self.assertFalse(ok, "同步 1 次/天")
+
 
 if __name__ == "__main__":
     unittest.main()

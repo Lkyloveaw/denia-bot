@@ -328,6 +328,183 @@ class EndfieldClient:
         data = await self._request("GET", "/api/announcements/latest")
         return data if isinstance(data, dict) else {}
 
+    async def get_gacha_records(
+        self,
+        framework_token: str,
+        *,
+        page: int = 1,
+        limit: int = 20,
+        pools: str = "",
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"page": max(1, int(page)), "limit": min(500, max(1, int(limit)))}
+        if pools:
+            params["pools"] = pools
+        data = await self._request(
+            "GET",
+            "/api/endfield/gacha/records",
+            params=params,
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_gacha_stats(self, framework_token: str) -> dict[str, Any]:
+        data = await self._request(
+            "GET", "/api/endfield/gacha/stats", framework_token=framework_token
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def post_gacha_fetch(
+        self, framework_token: str, role_id: str = ""
+    ) -> dict[str, Any]:
+        body = {"role_id": role_id} if role_id else {}
+        data = await self._request(
+            "POST",
+            "/api/endfield/gacha/fetch",
+            body=body,
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_gacha_sync_status(self, framework_token: str) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/endfield/gacha/sync/status",
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_panel_chars(
+        self,
+        framework_token: str,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/panel/chars",
+            params={
+                "page": max(1, int(page)),
+                "page_size": min(50, max(1, int(page_size))),
+            },
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_panel_chars_all(
+        self,
+        framework_token: str,
+        *,
+        page_size: int = 50,
+        max_pages: int = 10,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        page = 1
+        while page <= max_pages:
+            data = await self.get_panel_chars(
+                framework_token, page=page, page_size=page_size
+            )
+            chunk = data.get("synced_chars") or data.get("chars") or []
+            if isinstance(chunk, list):
+                rows.extend(item for item in chunk if isinstance(item, dict))
+            try:
+                pages = int(data.get("pages") or 1)
+            except (TypeError, ValueError):
+                pages = 1
+            if page >= pages:
+                break
+            page += 1
+        return rows
+
+    async def get_panel_char(
+        self, framework_token: str, template_id: str
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            f"/api/panel/char/{template_id}",
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_card_char(
+        self,
+        framework_token: str,
+        *,
+        inst_id: str = "",
+        operator_id: str = "",
+        char_id: str = "",
+        role_id: str = "",
+        server_id: int = 0,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if inst_id:
+            params["instId"] = inst_id
+        else:
+            if operator_id:
+                params["operatorId"] = operator_id
+            if char_id:
+                params["charId"] = char_id
+        if role_id:
+            params["roleId"] = role_id
+        if server_id:
+            params["serverId"] = server_id
+        data = await self._request(
+            "GET",
+            "/api/endfield/card/char",
+            params=params or None,
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_card_detail(
+        self, framework_token: str, role_id: str, server_id: int = 1
+    ) -> dict[str, Any]:
+        data = await self._request(
+            "GET",
+            "/api/endfield/card/detail",
+            params={"roleId": role_id, "serverId": server_id, "userId": role_id},
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_crisis_contract(
+        self,
+        framework_token: str,
+        contract_id: str,
+        *,
+        role_id: str = "",
+        server_id: int = 1,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"contractId": contract_id}
+        if role_id:
+            params["roleId"] = role_id
+            params["userId"] = role_id
+        if server_id:
+            params["serverId"] = server_id
+        data = await self._request(
+            "GET",
+            "/api/endfield/card/crisis-contract",
+            params=params,
+            framework_token=framework_token,
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_wiki_activities(self) -> dict[str, Any]:
+        data = await self._request("GET", "/api/wiki/activities")
+        return data if isinstance(data, dict) else {}
+
+    async def sync_panel(self, framework_token: str) -> dict[str, Any]:
+        data = await self._request(
+            "POST", "/api/panel/sync", framework_token=framework_token
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def get_panel_sync_status(self, framework_token: str) -> dict[str, Any]:
+        data = await self._request(
+            "GET", "/api/panel/sync/status", framework_token=framework_token
+        )
+        return data if isinstance(data, dict) else {}
+
 
 def _response_message(response: httpx.Response) -> str:
     try:

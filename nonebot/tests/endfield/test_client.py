@@ -196,6 +196,110 @@ class EndfieldClientTest(unittest.IsolatedAsyncioTestCase):
         bindings = await client.get_bindings("user-qq")
         self.assertEqual([item["id"] for item in bindings], ["b1", "b2"])
 
+    async def test_gacha_records_and_stats(self):
+        def handler(request):
+            if request.url.path.endswith("/records"):
+                self.assertEqual(request.url.params.get("page"), "2")
+                self.assertEqual(request.url.params.get("limit"), "20")
+                return httpx.Response(
+                    200,
+                    json={"code": 0, "data": {"records": [{"rarity": 6}], "pages": 3}},
+                )
+            return httpx.Response(
+                200, json={"code": 0, "data": {"stats": {"total_count": 10}}}
+            )
+
+        client = self._make(handler)
+        records = await client.get_gacha_records("token", page=2, limit=20)
+        self.assertEqual(records["pages"], 3)
+        stats = await client.get_gacha_stats("token")
+        self.assertEqual(stats["stats"]["total_count"], 10)
+
+    async def test_gacha_fetch_posts_role_id(self):
+        seen = {}
+
+        def handler(request):
+            seen["method"] = request.method
+            seen["path"] = request.url.path
+            seen["body"] = request.content.decode()
+            return httpx.Response(200, json={"code": 0, "data": {"status": "started"}})
+
+        client = self._make(handler)
+        data = await client.post_gacha_fetch("token", "role-1")
+        self.assertEqual(seen["method"], "POST")
+        self.assertEqual(seen["path"], "/api/endfield/gacha/fetch")
+        self.assertIn("role_id", seen["body"])
+        self.assertIn("role-1", seen["body"])
+        self.assertEqual(data["status"], "started")
+
+    async def test_panel_chars_all_pagination(self):
+        self.calls = []
+
+        def handler(request):
+            page = request.url.params.get("page")
+            self.calls.append(page)
+            return httpx.Response(
+                200,
+                json={
+                    "code": 0,
+                    "data": {
+                        "synced_chars": [{"name": f"角色{page}"}],
+                        "pages": 2,
+                    },
+                },
+            )
+
+        client = self._make(handler)
+        rows = await client.get_panel_chars_all("token", page_size=1)
+        self.assertEqual([row["name"] for row in rows], ["角色1", "角色2"])
+        self.assertEqual(self.calls, ["1", "2"])
+
+    async def test_card_detail_and_crisis_params(self):
+        seen = []
+
+        def handler(request):
+            seen.append((request.url.path, dict(request.url.params)))
+            if request.url.path.endswith("/card/detail"):
+                return httpx.Response(200, json={"code": 0, "data": {"ok": True}})
+            return httpx.Response(200, json={"code": 0, "data": {"ok": True}})
+
+        client = self._make(handler)
+        await client.get_card_detail("token", "role-1", 2)
+        await client.get_crisis_contract("token", "c-1", role_id="role-1", server_id=2)
+        self.assertEqual(seen[0][0], "/api/endfield/card/detail")
+        self.assertEqual(seen[0][1], {"roleId": "role-1", "serverId": "2", "userId": "role-1"})
+        self.assertEqual(seen[1][0], "/api/endfield/card/crisis-contract")
+        self.assertEqual(seen[1][1]["contractId"], "c-1")
+
+    async def test_wiki_and_panel_sync(self):
+        seen = []
+
+        def handler(request):
+            seen.append((request.method, request.url.path))
+            return httpx.Response(200, json={"code": 0, "data": {"ok": True}})
+
+        client = self._make(handler)
+        await client.get_wiki_activities()
+        await client.sync_panel("token")
+        await client.get_panel_sync_status("token")
+        self.assertEqual(
+            seen,
+            [
+                ("GET", "/api/wiki/activities"),
+                ("POST", "/api/panel/sync"),
+                ("GET", "/api/panel/sync/status"),
+            ],
+        )
+
+    async def test_panel_char_path(self):
+        def handler(request):
+            self.assertEqual(request.url.path, "/api/panel/char/tpl-1")
+            return httpx.Response(200, json={"code": 0, "data": {"panel": {}}})
+
+        client = self._make(handler)
+        data = await client.get_panel_char("token", "tpl-1")
+        self.assertIn("panel", data)
+
 
 if __name__ == "__main__":
     unittest.main()
