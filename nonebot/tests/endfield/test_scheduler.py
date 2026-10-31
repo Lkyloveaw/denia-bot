@@ -97,6 +97,7 @@ class SchedulerTest(unittest.IsolatedAsyncioTestCase):
             sink=self.sink,
             config_provider=lambda: self.config,
             heartbeat_path=folder / "heartbeat.json",
+            audit_path=folder / "audit.jsonl",
         )
 
     async def test_announcement_dedupe(self):
@@ -189,6 +190,14 @@ class SchedulerTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(path.exists())
         data = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(data["ts"], int(datetime(2026, 10, 31, 12, 0).timestamp()))
+
+    async def test_audit_written(self):
+        await self.subscriptions.set_personal("sanity", "100")
+        await self.scheduler.tick(datetime(2026, 10, 31, 12, 0))
+        path = Path(self.tmp.name) / "audit.jsonl"
+        self.assertTrue(path.exists())
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(rows[-1]["event"], "sanity_push")
 
     def test_quiet_window_and_signin_due(self):
         self.assertTrue(

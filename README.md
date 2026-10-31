@@ -53,9 +53,10 @@ SnowLuma  ──② 反向 WS ──▶  NoneBot2 :8080
 | `time_context` | 给模型提供当前时间和历史对话的时间戳 |
 | `weather` | 天气查询 + 显式配置的定时推送 |
 | `media_parser` | 多平台链接解析（在 AstrBot 原插件基础上适配到 NoneBot2） |
+| `endfield` | 终末地：绑定/便签/理智/签到、抽卡/干员/危机/日历/成就/建设查询、图卡、公告与订阅；详见 `docs/endfield.md` |
 
 管理面板：`nonebot/dashboard.py`（FastAPI + 单页 HTML），提供群话题、天气推送、主人设置等管理接口。
-另有 `bot_monitor.py` 做只读状态检查与串行重启。
+另有 `bot_monitor.py` 做只读状态检查与串行重启。终末地面板在 `/endfield`。
 
 ---
 

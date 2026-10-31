@@ -58,6 +58,7 @@ SECRETS_PATH = BASE_DIR / "data" / "endfield_secrets.json"
 BINDINGS_PATH = DATA_DIR / "bindings.json"
 SUBSCRIPTIONS_PATH = DATA_DIR / "subscriptions.json"
 HEARTBEAT_PATH = DATA_DIR / "heartbeat.json"
+AUDIT_PATH = DATA_DIR / "audit.jsonl"
 
 _gate = logic.UserGate()
 _pending_consent: set[str] = set()
@@ -201,6 +202,7 @@ async def _start_endfield_scheduler() -> None:
         sink=OneBotPushSink(),
         config_provider=_config,
         heartbeat_path=HEARTBEAT_PATH,
+        audit_path=AUDIT_PATH,
     )
     _scheduler_task = asyncio.create_task(scheduler.run_forever(60))
 

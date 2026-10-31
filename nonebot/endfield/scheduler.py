@@ -65,6 +65,7 @@ class EndfieldScheduler:
         sink: PushSink,
         config_provider: Callable[[], EndfieldConfig],
         heartbeat_path: str | os.PathLike[str] | None = None,
+        audit_path: str | os.PathLike[str] | None = None,
         clock: Callable[[], datetime] | None = None,
     ):
         self.bindings = bindings
@@ -73,6 +74,7 @@ class EndfieldScheduler:
         self.sink = sink
         self.config_provider = config_provider
         self.heartbeat_path = Path(heartbeat_path) if heartbeat_path else None
+        self.audit_path = Path(audit_path) if audit_path else None
         self.clock = clock or datetime.now
         self._push_counts: dict[tuple[str, str], int] = {}
         self._current: datetime | None = None
@@ -152,6 +154,7 @@ class EndfieldScheduler:
                     last_item_id=item_key,
                     fail_count=0,
                 )
+                self._audit("announcement_push", group=group_id, ok=True, item=item_key)
             else:
                 fail_count = int(sub.get("fail_count") or 0) + 1
                 await self.subscriptions.update_announcement(
@@ -159,6 +162,7 @@ class EndfieldScheduler:
                     fail_count=fail_count,
                     enabled=fail_count < config.push_disable_after_failures,
                 )
+                self._audit("announcement_push", group=group_id, ok=False, item=item_key)
 
     async def _poll_sanity(self, now: datetime, config: EndfieldConfig) -> None:
         subs = await self.subscriptions.list_personal("sanity")
@@ -205,6 +209,7 @@ class EndfieldScheduler:
                     await self.subscriptions.update_personal(
                         "sanity", qq, last_notified=1, fail_count=0
                     )
+                    self._audit("sanity_push", ok=True)
                 else:
                     await self._record_push_failure("sanity", qq, sub, config)
             elif int(sub.get("last_notified") or 0) == 1:
@@ -255,6 +260,7 @@ class EndfieldScheduler:
                     await self.subscriptions.update_personal(
                         "tickets", qq, last_notified=1, fail_count=0
                     )
+                    self._audit("tickets_push", ok=True)
                 else:
                     await self._record_push_failure("tickets", qq, sub, config)
             elif int(sub.get("last_notified") or 0) == 1:
@@ -312,6 +318,9 @@ class EndfieldScheduler:
                 last_result=result,
                 last_error="；".join(failures)[:200],
             )
+            self._audit(
+                "signin", result=result, success=success, failed=len(failures)
+            )
             if failures and not _in_quiet(now, config):
                 await self._push_private(
                     str(qq),
@@ -356,6 +365,31 @@ class EndfieldScheduler:
             fail_count=fail_count,
             enabled=fail_count < config.push_disable_after_failures,
         )
+        self._audit("push_failure", kind=kind, fail_count=fail_count)
+
+    def _audit(self, event: str, **fields: Any) -> None:
+        if self.audit_path is None:
+            return
+        current = self._current or datetime.now()
+        row = {"ts": int(current.timestamp()), "event": event, **fields}
+        try:
+            self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+            if (
+                self.audit_path.exists()
+                and self.audit_path.stat().st_size > 1024 * 1024
+            ):
+                os.replace(
+                    self.audit_path,
+                    self.audit_path.with_name(self.audit_path.name + ".1"),
+                )
+            with self.audit_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            try:
+                os.chmod(self.audit_path, 0o600)
+            except OSError:
+                pass
+        except OSError:
+            pass
 
     def _write_heartbeat(self, now: datetime) -> None:
         if self.heartbeat_path is None:
