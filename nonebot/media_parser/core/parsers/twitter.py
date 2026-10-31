@@ -104,10 +104,8 @@ class TwitterParser(BaseParser):
             # 媒体都在 pbs.twimg.com，用推特 header
             contents.extend(self.create_image_contents(image_urls, headers=self.fx_headers))
 
-        # 视频和图都没有时，看看有没有 gif（fxtwitter 把它放在 videos 里，type=gif）
-        if not contents:
-            raise ParseException("这条推文里没有可下载的媒体")
-
+        # 纯文字推文也照样出卡片：作者、头像、正文都是有效信息，
+        # 早期版本在这里直接抛错，导致一条纯文字推文完全解析失败。
         return self.result(
             # 不给 title：头部已经显示头像、昵称、时间，正文里也有全部内容，
             # 再放一行作者名就是重复。推文没有「标题」这个概念。

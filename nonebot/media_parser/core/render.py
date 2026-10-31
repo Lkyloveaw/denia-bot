@@ -1426,6 +1426,23 @@ class Renderer:
                     return line, rest
                 return head, tail + rest
 
+            def flush_at_break(line: str, rest: str) -> tuple[str, str]:
+                """先按空格断词；断不了（整行是个长 URL）就按 URL 自己的分隔符断。
+
+                URL 里没有空格，逐字符断会把 `.../multiple-c|hatgpt-accounts`
+                拦腰截断，长链接还会整行走不完。在 `/ - _ . ? & =` 这些位置
+                断开，读起来仍是完整的分段。
+                """
+                line, rest = flush_at_space(line, rest)
+                if " " in line:
+                    return line, rest
+                for sep in ("/", "-", "_", ".", "?", "&", "="):
+                    idx = line.rfind(sep)
+                    # 太靠前的分隔符不用，免得把 `https:` 这种劈出来
+                    if idx > len(line) // 3:
+                        return line[: idx + 1], line[idx + 1 :] + rest
+                return line, rest
+
             while remaining_text:
                 next_char = remaining_text[0]
                 char_width = font_info.get_char_width_fast(next_char)
@@ -1457,8 +1474,8 @@ class Renderer:
                     current_line_width = test_width
                     remaining_text = remaining_text[1:]
                 else:
-                    # 宽度超限，需要断行：先试按空格断，能断就断在词边界
-                    line, rest = flush_at_space(current_line, remaining_text)
+                    # 宽度超限，需要断行：优先按空格断词，长 URL 再按分隔符断
+                    line, rest = flush_at_break(current_line, remaining_text)
                     if line != current_line:
                         lines.append(line)
                         current_line = ""
