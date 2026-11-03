@@ -37,7 +37,7 @@ except ImportError:  # 不是从 nonebot\ 目录启动的，把工程根补进 s
     import kb_logic as kbl
 
 __plugin_meta__ = PluginMetadata(
-    name="kb", description="鸣潮设定知识库检索注入", usage="/kb on | /kb off | /kb 查 <问题>"
+    name="kb", description="鸣潮设定知识库检索注入", usage=".kb on | .kb off | .kb 查 <问题>"
 )
 
 RAG_URL = os.getenv("KB_RAG_URL", "http://127.0.0.1:8091")
@@ -183,7 +183,7 @@ async def run_probe(arg: str) -> str | None:
     if probe is None:
         return None
     if not probe:
-        return "用法：/kb 查 <问题>"
+        return "用法：.kb 查 <问题>"
 
     q = kbl.diagnostic_query(probe)
     if not q:
@@ -238,5 +238,5 @@ async def status(event: Event, args: Message = CommandArg()) -> None:
 
     await kb.finish(
         f"本会话自动注入：{'开' if _on(session) else '关'}\n检索服务：{svc}\n"
-        f"指令：/kb on | /kb off | /kb 查 <问题>"
+        f"指令：.kb on | .kb off | .kb 查 <问题>"
     )

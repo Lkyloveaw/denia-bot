@@ -24,7 +24,7 @@ import kb_logic as kl  # noqa: E402
 import prompt_logic as pl  # noqa: E402
 
 FAILED: list[str] = []
-KNOWN = {"1690711850": "漂泊者"}
+KNOWN = {"10000001": "漂泊者"}
 GRP = "qq_OneBot V11_3892894069_922192732"
 OLD = "qq_OneBot V11_3892894069_1108838060"
 
@@ -85,7 +85,7 @@ def t_label_turn_without_label():
 
 
 def t_known_name_beats_qq_nickname():
-    assert pl.resolve_speaker("1690711850", "对乙酰氨基酚", KNOWN) == "漂泊者"
+    assert pl.resolve_speaker("10000001", "对乙酰氨基酚", KNOWN) == "漂泊者"
 
 
 def t_unknown_person_keeps_their_card():
@@ -173,7 +173,7 @@ def t_limit_zero_means_unlimited():
 
 def t_labels_resolved_for_every_row():
     rows = [
-        turn("2026.09.27 15:20:46", uid="1690711850", msg="<对乙酰氨基酚> 娅娅"),
+        turn("2026.09.27 15:20:46", uid="10000001", msg="<对乙酰氨基酚> 娅娅"),
         turn("2026.09.27 15:21:42", uid="982272752", msg="<穿梭机> 你搁哪里发财呢"),
     ]
     out = pl.normalize_turns(rows, current_group="922192732", known=KNOWN)

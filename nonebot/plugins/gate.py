@@ -277,10 +277,10 @@ def help_image():
     """`.help` 的图片菜单；失败返回 None 由调用方回退文本。"""
     import help_image as hi
 
-    return hi.render_help_image(
+    return hi.render_help_images(
         gl.grouped_help_rows(gl.all_help_rows()),
         title='达妮娅 · 指令菜单',
-        subtitle='写成 .指令 或 /指令；私聊直接打词也行',
+        subtitle=gl.HELP_PREFIX_GUIDE,
         footer=gl.help_footer(state()),
     )
 
@@ -310,6 +310,7 @@ def _protocol_path(path):
 
 
 async def is_help_command(event: Event) -> bool:
+    # Help is available in groups without @; the chat-only gate is independent.
     return (
         gl.parse_gate_command(
             _text(event), gl.HELP_HEADS, _nicknames(), allow_bare=gl.BARE_HELP_HEADS
@@ -320,10 +321,17 @@ async def is_help_command(event: Event) -> bool:
 
 # 优先级必须小于 MuiceBot 自己那条 command_help（90），block=True 才会拦得住它
 help_cmd = on_message(rule=is_help_command, priority=80, block=True)
+_help_limiter = gl.HelpRateLimiter()
 
 
 @help_cmd.handle()
-async def handle_help() -> None:
+async def handle_help(event: Event) -> None:
+    if getattr(event, 'message_type', None) == 'group':
+        group = str(event.group_id)
+        # Reserve before the first await so concurrent members share five slots.
+        # Finish inside this blocking matcher: do not fall through to the LLM.
+        if not _help_limiter.acquire(group):
+            await help_cmd.finish()
     # 图片菜单优先；渲染或发送失败就退回纯文本，绝不能不回。
     # 注意不能把 matcher.finish() 放进 try：它抛的 FinishedException 继承 Exception，
     # 会被当成「发送失败」吃掉，结果两条路都不生效、消息一条也不发。
@@ -334,13 +342,13 @@ async def handle_help() -> None:
         logger.debug('[gate] 帮助菜单图片渲染失败，回退文本', exc_info=True)
 
     if path is not None:
-        from nonebot.adapters.onebot.v11 import MessageSegment
         from nonebot.exception import FinishedException
 
-        target = _protocol_path(path)
+        from card_delivery import image_message
+        target = [_protocol_path(item) for item in path]
         logger.debug(f'[gate] 帮助菜单图片：{path} -> {target}')
         try:
-            await help_cmd.finish(MessageSegment.image(target))
+            await help_cmd.finish(image_message(target))
         except FinishedException:
             raise          # 正常结束，必须放行，否则两条路都发不出去
         except Exception as exc:  # noqa: BLE001 - 真的发送失败才回退文本

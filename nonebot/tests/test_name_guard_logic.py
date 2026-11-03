@@ -82,8 +82,8 @@ def t_timeout_uses_the_event_when_no_id_was_given():
     async def hang(user_id=None, event=None):
         await asyncio.sleep(5)
 
-    got = call(ng.guard(hang, 0.05)(None, Event("1690711850")))
-    assert got == "1690711850", f"该从事件里取 userid，结果是 {got!r}"
+    got = call(ng.guard(hang, 0.05)(None, Event("10000001")))
+    assert got == "10000001", f"该从事件里取 userid，结果是 {got!r}"
 
 
 def t_timeout_without_anything_to_say_is_a_placeholder():
@@ -143,8 +143,8 @@ def t_timeout_asks_the_running_context_for_the_event():
     async def hang(user_id=None, event=None):
         await asyncio.sleep(5)
 
-    got = call(ng.guard(hang, 0.05, current_event=lambda: Event("1690711850"))())
-    assert got == "1690711850", f"该去上下文里拿事件，结果是 {got!r}"
+    got = call(ng.guard(hang, 0.05, current_event=lambda: Event("10000001"))())
+    assert got == "10000001", f"该去上下文里拿事件，结果是 {got!r}"
 
 
 def t_a_context_that_refuses_to_answer_still_falls_back():
@@ -249,9 +249,9 @@ def t_patch_passes_the_callbacks_through():
     mod = FakeMod()
     ng.patch([mod], 0.05, on_timeout=lambda n, t: timed.append((n, t)),
              on_enter=lambda t: entered.append(t),
-             current_event=lambda: Event("1690711850"))
-    assert call(mod.get_username()) == "1690711850", "空手调用时该从上下文拿 userid"
-    assert entered == [0.05] and timed == [("1690711850", 0.05)], f"{entered} / {timed}"
+             current_event=lambda: Event("10000001"))
+    assert call(mod.get_username()) == "10000001", "空手调用时该从上下文拿 userid"
+    assert entered == [0.05] and timed == [("10000001", 0.05)], f"{entered} / {timed}"
 
 
 def t_guard_says_it_was_asked():

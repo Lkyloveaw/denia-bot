@@ -1,0 +1,17 @@
+{
+  "name": "qqbot-playwright-renderer",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Remote Playwright renderer for denia-bot disaster cards",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test server.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "1.60.0"
+  }
+}

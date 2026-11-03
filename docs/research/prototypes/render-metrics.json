@@ -1,0 +1,50 @@
+[
+  {
+    "type": "weather",
+    "variant": "A",
+    "file": "weather-A.png",
+    "bytes": 129259,
+    "render_ms": 540,
+    "html_chars": 34672
+  },
+  {
+    "type": "typhoon",
+    "variant": "A",
+    "file": "typhoon-A.png",
+    "bytes": 63988,
+    "render_ms": 173,
+    "html_chars": 34672
+  },
+  {
+    "type": "tsunami",
+    "variant": "A",
+    "file": "tsunami-A.png",
+    "bytes": 59560,
+    "render_ms": 158,
+    "html_chars": 34672
+  },
+  {
+    "type": "earthquake",
+    "variant": "A",
+    "file": "earthquake-A.png",
+    "bytes": 61747,
+    "render_ms": 184,
+    "html_chars": 34678
+  },
+  {
+    "type": "weather",
+    "variant": "B",
+    "file": "weather-B.png",
+    "bytes": 169361,
+    "render_ms": 256,
+    "html_chars": 34672
+  },
+  {
+    "type": "weather",
+    "variant": "C",
+    "file": "weather-C.png",
+    "bytes": 106697,
+    "render_ms": 204,
+    "html_chars": 34672
+  }
+]

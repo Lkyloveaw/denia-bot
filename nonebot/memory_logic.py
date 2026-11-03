@@ -160,21 +160,21 @@ def set_vector(path, user_id, memory_id, expected_text, vector):
         row = con.execute('SELECT id FROM memories WHERE id=? AND user_id=? AND text=?', (memory_id, str(user_id), expected_text)).fetchone()
         if not row:
             return False
-        con.execute('INSERT OR REPLACE INTO memory_vectors(memory_id,vector,model) VALUES(?,?,?)', (memory_id, packed, 'bge-m3-fp16-v1'))
+        con.execute('INSERT OR REPLACE INTO memory_vectors(memory_id,vector,model) VALUES(?,?,?)', (memory_id, packed, 'siliconflow-bge-m3-v1'))
         return True
 
 
 def missing_vectors(path, user_id, limit=20):
     with _connect(path) as con:
         return [dict(r) for r in con.execute('''SELECT m.id,m.text FROM memories m LEFT JOIN memory_vectors v
-            ON m.id=v.memory_id AND v.model='bge-m3-fp16-v1' WHERE m.user_id=? AND v.memory_id IS NULL ORDER BY m.id LIMIT ?''', (str(user_id),limit))]
+            ON m.id=v.memory_id AND v.model='siliconflow-bge-m3-v1' WHERE m.user_id=? AND v.memory_id IS NULL ORDER BY m.id LIMIT ?''', (str(user_id),limit))]
 
 
 def recall(path, user_id, vector, query, limit=5):
     packed = _pack(vector) if vector is not None else None
     with _connect(path) as con:
         rows = con.execute('''SELECT m.id,m.text,m.source,v.vector FROM memories m
-            LEFT JOIN memory_vectors v ON m.id=v.memory_id AND v.model='bge-m3-fp16-v1'
+            LEFT JOIN memory_vectors v ON m.id=v.memory_id AND v.model='siliconflow-bge-m3-v1'
             WHERE m.user_id=?''', (str(user_id),)).fetchall()
     scored = []
     for row in rows:
@@ -200,7 +200,7 @@ def store_vector_fact(path, user_id, text, source, expected_revision, vector):
         if (row['revision'] if row else 0) != expected_revision:
             return 'stale'
         rows = con.execute('''SELECT m.id,m.text,v.vector FROM memories m LEFT JOIN memory_vectors v
-            ON m.id=v.memory_id AND v.model='bge-m3-fp16-v1' WHERE m.user_id=?''', (user_id,)).fetchall()
+            ON m.id=v.memory_id AND v.model='siliconflow-bge-m3-v1' WHERE m.user_id=?''', (user_id,)).fetchall()
         if any(r['text'] == text for r in rows):
             return 'duplicate'
         similar = max((( _similarity(packed, r['vector']), r['id']) for r in rows), default=(-1, None))
@@ -211,7 +211,7 @@ def store_vector_fact(path, user_id, text, source, expected_revision, vector):
             con.execute('INSERT OR IGNORE INTO memory_candidates(user_id,text,source,similar_id) VALUES(?,?,?,?)', (user_id, text, source, similar[1]))
             return 'candidate'
         cur = con.execute('INSERT INTO memories(user_id,text,source) VALUES(?,?,?)', (user_id,text,source))
-        con.execute('INSERT INTO memory_vectors(memory_id,vector,model) VALUES(?,?,?)', (cur.lastrowid,packed,'bge-m3-fp16-v1'))
+        con.execute('INSERT INTO memory_vectors(memory_id,vector,model) VALUES(?,?,?)', (cur.lastrowid,packed,'siliconflow-bge-m3-v1'))
         return 'saved'
 
 

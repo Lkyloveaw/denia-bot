@@ -28,6 +28,7 @@ from ..config import PluginConfig
 from ..cookie import CookieJar
 from ..data import ImageContent
 from ..download import Downloader
+from ..utils import generate_file_name
 from .base import BaseParser, ParseException, Platform, handle
 
 CI_HOST = "https://ci.xiaohongshu.com"
@@ -42,6 +43,17 @@ IMAGE_SUFFIX = {"image/jpeg": ".jpg", "image/png": ".png",
 
 HEIF_BRANDS = (b"heic", b"heix", b"mif1", b"heim", b"heis", b"hevc", b"hevx")
 """HEIF/HEIC 的 ftyp brand。苹果手机传的原图常是这种格式，QQ 显示不了。"""
+
+PREVIEW_TIMEOUT = 5
+
+
+def cached_image_path(cache_dir: Path, url: str, prefix: str = "") -> Path | None:
+    """兼容按文件头纠正后的扩展名，避免每次重下同一张原图。"""
+    path = cache_dir / (prefix + generate_file_name(url, ".jpg"))
+    for candidate in dict.fromkeys([path, *(path.with_suffix(s) for s in IMAGE_SUFFIX.values())]):
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            return candidate
+    return None
 
 
 def extract_image_token(url: str | None) -> str | None:
@@ -282,9 +294,11 @@ class XHSParser(BaseParser):
         if not candidates:
             raise ParseException("图片地址为空")
 
-        path = await self.downloader.download_img(
-            candidates[0], headers=self.headers, proxy=self.proxy
-        )
+        path = cached_image_path(self.cfg.cache_dir, candidates[0])
+        if path is None:
+            path = await self.downloader.download_img(
+                candidates[0], headers=self.headers, proxy=self.proxy
+            )
 
         if is_heif(path):
             converted = await asyncio.to_thread(convert_heif_to_jpeg, path)
@@ -324,20 +338,37 @@ class XHSParser(BaseParser):
         else:
             logger.debug(f"小红书图片尺寸 {got[0]}x{got[1]}：{path.name}")
 
-    async def _image_contents(self, images: list[Any]) -> list[Any]:
-        """把图片列表转成图片内容，每张走「原图优先 + HEIC 回退」。"""
-        contents = []
-        for image in images:
-            task = self._download_image(image)
-            contents.append(ImageContent(asyncio.ensure_future(task)))
-        return contents
+    async def _download_preview(self, url: str) -> Path | None:
+        """卡片使用 CDN 预览，失败时略过该图，不阻塞原图转发。"""
+        cached = cached_image_path(self.cfg.cache_dir, url, "preview_")
+        if cached is not None:
+            return cached
+        name = "preview_" + generate_file_name(url, ".jpg")
+        try:
+            path = await asyncio.wait_for(
+                self.downloader.download_img(
+                    url, img_name=name, headers=self.headers, proxy=self.proxy
+                ),
+                timeout=PREVIEW_TIMEOUT,
+            )
+            return fix_image_suffix(path)
+        except Exception as exc:
+            # 超时取消下载后可能留下半个文件，不能把它当作缓存。
+            (self.cfg.cache_dir / name).unlink(missing_ok=True)
+            logger.debug(f"小红书预览图不可用：{type(exc).__name__}")
+            return None
 
     async def _image_contents(self, images: list[Any]) -> list[Any]:
-        """把图片列表转成图片内容，每张走「原图优先 + HEIC 回退」。"""
+        """原图负责转发，小尺寸素材负责卡片，两个下载任务并行。"""
         contents = []
         for image in images:
-            task = self._download_image(image)
-            contents.append(ImageContent(asyncio.ensure_future(task)))
+            candidates = image_candidates(image)
+            preview = None
+            if self.cfg.single_heavy_render_card and len(candidates) > 1:
+                preview = asyncio.create_task(self._download_preview(candidates[-1]))
+            contents.append(ImageContent(
+                asyncio.create_task(self._download_image(image)), preview=preview
+            ))
         return contents
 
     @handle("xhslink.com", r"xhslink\.com/[A-Za-z0-9._?%&+=/#@-]+")

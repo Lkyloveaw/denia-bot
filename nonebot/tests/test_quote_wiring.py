@@ -23,9 +23,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import nonebot  # noqa: E402
 
-nonebot.init()
-nonebot.load_plugin("muicebot")
-
+try:  # 整份用例同进程跑时复用已初始化的 NoneBot（见 tests/_bootstrap.py）
+    from tests._bootstrap import ensure_nonebot
+except ImportError:  # discover 以 tests 为顶层时模块名不带包前缀
+    from _bootstrap import ensure_nonebot
+ensure_nonebot()
 import plugins.quote_fix as qf  # noqa: E402
 from nonebot.adapters import Message as BotMessage  # noqa: E402
 from nonebot.adapters.onebot.v11 import Message as OBMessage  # noqa: E402
@@ -111,7 +113,7 @@ def t_patched_quote_reaches_the_model():
 def t_owner_quote_uses_the_configured_name():
     """被引用的是主人说的话：称呼走 templates.yml（对乙酰氨基酚 → 漂泊者），跟 prompt_guard 同源。"""
     reply = alconna_reply(
-        quoted_ob_message("娅娅"), nickname="对乙酰氨基酚", user_id=1690711850
+        quoted_ob_message("娅娅"), nickname="对乙酰氨基酚", user_id=10000001
     )
     qf.fix_reply(reply)
     assert reply.msg.startswith("〔发言人:"), repr(reply.msg)

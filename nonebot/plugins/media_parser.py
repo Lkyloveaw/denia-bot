@@ -7,9 +7,10 @@ from muicebot.plugin import PluginMetadata
 from nonebot import get_driver, logger, on_message
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
 
+import gate_logic as gl
 from parser_logic import session_key
 
-__plugin_meta__ = PluginMetadata(name='media_parser', description='多平台链接解析', usage='管理员：开启解析 / 关闭解析 / blogin')
+__plugin_meta__ = PluginMetadata(name='media_parser', description='多平台链接解析', usage='超级管理员：开启解析 / 关闭解析 / blogin')
 
 driver = get_driver()
 runtime = None
@@ -43,19 +44,37 @@ def command_text(event):
     return text.lstrip('./').strip().lower()
 
 
+CONTROL_COMMANDS = ('开启解析', '关闭解析', 'blogin', '登录b站')
+
+gl.register_help_rows([
+    ('开启解析', '本会话恢复链接解析（仅主人）'),
+    ('关闭解析', '本会话停止链接解析（仅主人）'),
+    ('blogin', '扫码登录 B 站，解析高码率视频（仅主人；别名：.登录b站）'),
+])
+
+
 async def is_control(event: MessageEvent):
-    return command_text(event) in {'开启解析', '关闭解析', 'blogin', '登录b站'}
+    return command_text(event) in CONTROL_COMMANDS
 
 
 control = on_message(rule=is_control, priority=1, block=True)
 
 
+def is_superuser(event: MessageEvent) -> bool:
+    """解析器管理指令只认 `.env` 里的 SUPERUSERS。
+
+    过去还放行群主/群管理员，等于让「谁能改解析行为」跟着群角色走：任何一个
+    有管理员的群都能改动全局解析配置，而且和其它插件（gate / statuscard 只认
+    超管）的口径对不上。QQ 的群角色是群内概念，不该外溢成机器人权限。
+    """
+    owners = {str(v) for v in (getattr(driver.config, 'superusers', None) or set())}
+    return str(event.user_id) in owners
+
+
 @control.handle()
 async def control_parser(bot: Bot, event: MessageEvent):
-    owners = {str(v) for v in getattr(driver.config, 'superusers', set())}
-    role = getattr(event.sender, 'role', '')
-    if str(event.user_id) not in owners and not (getattr(event, 'group_id', None) is not None and role in {'owner', 'admin'}):
-        await control.finish('只有管理员可以使用这个指令。')
+    if not is_superuser(event):
+        return
     if not runtime:
         await control.finish('解析器未就绪，请查看机器人日志。')
     command = command_text(event)

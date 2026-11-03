@@ -26,9 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import nonebot  # noqa: E402
 from nonebot.log import logger  # noqa: E402
 
-nonebot.init()
-nonebot.load_plugin("muicebot")
-
+try:  # 整份用例同进程跑时复用已初始化的 NoneBot（见 tests/_bootstrap.py）
+    from tests._bootstrap import ensure_nonebot
+except ImportError:  # discover 以 tests 为顶层时模块名不带包前缀
+    from _bootstrap import ensure_nonebot
+ensure_nonebot()
 import gate_logic as gl  # noqa: E402
 import plugins.gate as gate  # noqa: E402
 from nonebot.adapters.onebot.v11 import (  # noqa: E402
@@ -43,7 +45,7 @@ from muicebot.models import Message as ChatMessage  # noqa: E402
 from muicebot.onebot import at_event, nickname_event  # noqa: E402
 
 SELF = "3892894069"
-MASTER = "1690711850"
+MASTER = "10000001"
 GROUP = 741096253
 FAILED: list[str] = []
 

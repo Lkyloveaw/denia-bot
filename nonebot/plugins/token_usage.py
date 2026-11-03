@@ -25,7 +25,7 @@ except ImportError:
 __plugin_meta__ = PluginMetadata(
     name='token_usage',
     description='统计 token 消耗与模型排名',
-    usage='管理后台查看；指令：token 今日 | token 排名',
+    usage='只在管理面板查看，没有聊天指令',
 )
 
 ROOT = Path(__file__).resolve().parent.parent

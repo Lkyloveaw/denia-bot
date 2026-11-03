@@ -1,0 +1,25 @@
+services:
+  renderer:
+    build:
+      context: ../..
+      dockerfile: docker/playwright-renderer/Dockerfile
+    image: qqbot-playwright:20261101-help
+    container_name: ${RENDER_CONTAINER_NAME:-qqbot-playwright}
+    restart: unless-stopped
+    ports:
+      # 只绑宿主机回环；不要把 3000 暴露到公网。
+      - "127.0.0.1:${RENDER_PORT:-3100}:3000"
+    environment:
+      PORT: "3000"
+      MAX_CONCURRENT: "2"
+      RENDER_DEPLOYMENT: "container"
+      # 可选；启用时机器人与面板进程均需配置 QQBOT_RENDER_TOKEN。
+      RENDER_TOKEN: "${RENDER_TOKEN:-}"
+    init: true
+    shm_size: "256mb"
+    mem_limit: 768m
+    memswap_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true

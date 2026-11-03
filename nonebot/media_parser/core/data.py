@@ -77,7 +77,15 @@ class VideoContent(MediaContent):
 class ImageContent(MediaContent):
     """图片内容"""
 
-    pass
+    preview: Path | Task[Path | None] | None = None
+    """可选的小尺寸卡片素材，与发送用的原图分开。"""
+
+    async def get_preview_path(self) -> Path | None:
+        if self.preview is None:
+            return await self.get_path()
+        if isinstance(self.preview, Path):
+            return self.preview
+        return await self.preview
 
 
 @dataclass(repr=False, slots=True, init=False)

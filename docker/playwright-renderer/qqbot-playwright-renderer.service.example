@@ -1,0 +1,23 @@
+[Unit]
+Description=QQ bot disaster Playwright renderer (host mode)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/qqbot/docker/playwright-renderer
+Environment=HOST=127.0.0.1
+Environment=PORT=3100
+Environment=MAX_CONCURRENT=2
+# 本机复用已有 Playwright：把 playwright / playwright-core 放到 vendor/，不走 npm 网络。
+Environment=NODE_PATH=/opt/qqbot/docker/playwright-renderer/vendor
+Environment=PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+Environment=HOME=/root
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+SyslogIdentifier=qqbot-playwright
+
+[Install]
+WantedBy=multi-user.target

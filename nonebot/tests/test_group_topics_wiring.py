@@ -11,8 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 import nonebot
-nonebot.init()
-nonebot.load_plugin('muicebot')
+try:  # 整份用例同进程跑时复用已初始化的 NoneBot（见 tests/_bootstrap.py）
+    from tests._bootstrap import ensure_nonebot
+except ImportError:  # discover 以 tests 为顶层时模块名不带包前缀
+    from _bootstrap import ensure_nonebot
+ensure_nonebot()
 from muicebot.llm import ModelRequest
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
 from plugins import group_topics as plugin
@@ -41,7 +44,7 @@ class WiringTest(unittest.TestCase):
                 self.assertIn('未开启', asyncio.run(plugin.topic_reply('101')))
                 plugin.topics.set_enabled(plugin.topics.DEFAULT_PATH, '101', True)
                 plugin.topics.record(plugin.topics.DEFAULT_PATH, '101', '1', '今汐', tokenizer=lambda _: ['今汐'])
-                fake_renderer = SimpleNamespace(render=lambda *a: b'png')
+                fake_renderer = SimpleNamespace(render_pages=lambda *a: [b'png'])
                 with patch.dict(sys.modules, {'weather_image': fake_renderer}):
                     result = asyncio.run(plugin.topic_reply('101'))
                 self.assertEqual(result.type, 'image')

@@ -7,9 +7,15 @@ from nonebot import get_driver, get_bots, logger, on_message
 from nonebot.adapters import Event, Bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
 from muicebot.plugin import PluginMetadata
+import gate_logic as gl
 import weather_service as weather
 
 __plugin_meta__ = PluginMetadata(name='weather', description='天气查询与推送', usage='天气 城市 / 天气预报 城市')
+
+gl.register_help_rows([
+    ('天气 <城市>', '当前天气实况'),
+    ('天气预报 <城市>', '今明两天预报'),
+])
 _command = re.compile(r'^\s*[./]?(天气预报|预报|weather|forecast|天气)\s*(.*?)\s*$', re.I)
 _natural = re.compile(r'^(?:请问|帮我看看|查一下|查询)?\s*([\u4e00-\u9fff]{2,12})(?:今天|明天|这几天)?(?:的)?天气(?:怎么样|如何|预报|多少|情况)?[？?。！!]*$')
 
@@ -40,8 +46,9 @@ _recent = {}
 async def as_picture(text):
     try:
         import weather_image
-        png = await asyncio.to_thread(weather_image.render, text)
-        return MessageSegment.image(png)
+        from card_delivery import image_message
+        pages = await asyncio.to_thread(weather_image.render_pages, text)
+        return image_message(pages)
     except Exception:
         logger.warning('[weather] 图片渲染失败，回退到文字')
         return text
@@ -50,7 +57,7 @@ async def as_picture(text):
 async def handle(event: Event):
     city, forecast = parse(event.get_plaintext())
     if not city:
-        await matcher.finish('想查询哪个城市或区县？例如：天气 北京')
+        await matcher.finish('想查询哪个城市或区县？例如：.天气 北京')
     now = time.monotonic()
     key = str(event.get_user_id())
     if now - _recent.get(key, 0) < 10:

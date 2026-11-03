@@ -1,27 +1,172 @@
 <!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>QQ 机器人管理</title>
 <style>
 :root{color-scheme:light;--bg:#faf9f5;--paper:#fffefa;--sidebar:#f0eee7;--ink:#292721;--muted:#817e73;--line:#e8e5dc;--accent:#c66e4e;--accent-dark:#a9563c;--accent-soft:#f7eae2;--radius:16px}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}button,input,select{font:inherit}button,input,select{border:1px solid #ddd9cf;border-radius:9px;min-height:40px}button{cursor:pointer;color:#554f44;background:#fffefa;padding:8px 14px;transition:background .15s,border-color .15s}button:hover{background:#f3f0e9;border-color:#cfc8ba}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #db9c83;outline-offset:2px}input,select{color:var(--ink);background:#fffefa;padding:8px 12px;max-width:100%}input::placeholder{color:#a5a095}a{color:inherit;text-decoration:none}[hidden]{display:none!important}.shell{min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:244px;background:var(--sidebar);border-right:1px solid #e5e1d7;padding:27px 18px;display:flex;flex-direction:column}.brand{display:flex;align-items:center;gap:11px;padding:0 7px 30px;font-weight:650;font-size:16px;letter-spacing:.02em}.brand-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--accent);color:white;font-size:18px}.nav-caption{font-size:11px;letter-spacing:.1em;color:#a19b8f;margin:6px 12px 10px}.nav-link{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:9px;color:#625e53;margin:2px 0}.nav-link:hover{background:#e8e4db}.nav-link.active{background:#e5e1d7;color:#332e27;font-weight:600}.nav-icon{width:18px;text-align:center;font-size:17px;color:#9a705d}.side-bottom{margin-top:auto;border-top:1px solid #dfdbd0;padding:18px 8px 0;color:#858072;font-size:12px}.side-bottom strong{display:block;color:#575248;font-size:13px}.side-logout{margin-top:10px;min-height:30px;font-size:12px;padding:4px 12px;background:transparent;color:#8a8375;border-color:#dfdbd0}.side-logout:hover{background:#e8e4db;color:#6b6558}.workspace{margin-left:244px;padding:42px 64px 80px;max-width:1500px}.topline{color:#9a9387;font-size:13px;display:flex;justify-content:space-between;gap:20px}.topline b{color:#716a5f;font-weight:500}.intro{padding:38px 0 24px}.eyebrow{font-size:12px;color:var(--accent-dark);font-weight:600;letter-spacing:.08em}.intro h1{font-family:Georgia,"Songti SC",serif;font-weight:500;letter-spacing:-.035em;font-size:37px;line-height:1.2;margin:9px 0 10px}.intro p,.section-description{color:var(--muted);margin:0}.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:26px 28px;margin:0 0 20px;scroll-margin-top:24px}.card-head{display:flex;gap:15px;align-items:flex-start;margin-bottom:23px}.card-icon{width:40px;height:40px;flex:none;display:grid;place-items:center;border-radius:12px;color:var(--accent-dark);background:var(--accent-soft);font-size:19px}.card h2{font-size:18px;letter-spacing:-.02em;margin:0 0 3px}.card h3{font-size:14px;margin:26px 0 10px}.card p{margin:10px 0}.section-description{font-size:13px}.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.controls select,.controls input{min-width:150px}.controls .grow{flex:1}.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.primary:hover{background:var(--accent-dark);border-color:var(--accent-dark)}.danger{color:#a2513e}.status{font-size:13px;color:var(--muted);margin:12px 0!important}.status:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#b3a998;margin-right:8px}.list{list-style:none;padding:0;margin:14px 0 0}.list:empty:after{content:'暂无内容';display:block;color:#aaa398;font-size:13px;padding:15px 0}.list li{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-top:1px solid #efede7;padding:12px 0;color:#554f46}.list li button{min-height:32px;font-size:12px;padding:4px 10px}.list li button:first-of-type{margin-left:auto}.subsection{border-top:1px solid var(--line);margin-top:24px;padding-top:1px}.hint{color:#938d81;font-size:12px}.auth-wrap{min-height:100vh;display:grid;place-items:center;padding:24px}.auth-card{width:min(100%,420px);padding:40px;background:var(--paper);border:1px solid var(--line);border-radius:20px;box-shadow:0 16px 50px #4b3b2510}.auth-card .brand-mark{width:42px;height:42px;margin-bottom:28px}.auth-card h1{font:500 29px/1.25 Georgia,"Songti SC",serif;margin:0 0 9px}.auth-card p{color:var(--muted);font-size:14px;margin:0 0 24px}.auth-card input{width:100%;margin-bottom:10px}.auth-card button{width:100%;margin-top:6px}.auth-label{display:block;font-size:13px;color:#6d675c;margin-bottom:7px}.auth-foot{font-size:12px!important;color:#aaa296!important;text-align:center;margin:24px 0 0!important}#message{color:#a44c39;font-size:13px;min-height:20px;margin:12px 0}#message:empty{display:none}.notice-slot{max-width:960px}.separator{height:1px;background:var(--line);margin:24px 0}.weather-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.weather-grid label{font-size:12px;color:#7c756a}.weather-grid input{display:block;width:100%;margin-top:5px}.weather-actions{margin-top:12px}.mobile-brand{display:none}
+@media(min-width:801px){.nav{min-height:0;overflow-y:auto;overscroll-behavior:contain}}
 @media(max-width:800px){.sidebar{position:static;width:auto;padding:16px;display:block;border-right:0;border-bottom:1px solid var(--line)}.brand{padding:0 0 12px}.nav-caption,.side-bottom{display:none}.nav{display:flex;gap:4px;overflow:auto}.nav-link{white-space:nowrap;margin:0;padding:8px 10px}.workspace{margin:0;padding:25px 20px 60px}.intro{padding:30px 0 22px}.intro h1{font-size:31px}.card{padding:22px 18px}.topline{font-size:12px}}@media(max-width:520px){.weather-grid{grid-template-columns:1fr}.controls input,.controls select{flex:1 1 100%}.auth-card{padding:30px 24px}.topline span:last-child{display:none}}
 .status:empty:before{display:none}#appMessage:not(:empty){color:#a44c39;background:#faede7;border:1px solid #efd7ca;border-radius:9px;padding:10px 14px;margin-bottom:18px;font-size:13px}
 .topic-visuals{margin-top:22px;border-top:1px solid var(--line);padding-top:22px}.topic-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px}.topic-heading h3{margin:0}.topic-heading small{color:var(--muted);font-size:12px}.topic-cloud{min-height:150px;display:flex;align-content:center;justify-content:center;align-items:baseline;flex-wrap:wrap;gap:10px 19px;padding:25px 18px;margin:14px 0 24px;background:#f8f5ef;border:1px solid #f0ece4;border-radius:12px}.topic-word{color:#a65c44;line-height:1.4;overflow-wrap:anywhere}.topic-word:nth-child(4n+2){color:#8e7e6e}.topic-word:nth-child(4n+3){color:#665e50}.topic-word:nth-child(4n){color:#bc856e}.topic-ranking{list-style:none;margin:12px 0 0;padding:0}.topic-ranking li{display:grid;grid-template-columns:28px minmax(70px,130px) minmax(30px,1fr) auto;align-items:center;gap:10px;padding:8px 0;font-size:13px}.topic-rank{color:#aaa298;font-variant-numeric:tabular-nums}.topic-label{overflow-wrap:anywhere}.topic-bar{height:7px;background:#f0ede7;border-radius:8px;overflow:hidden}.topic-fill{display:block;height:100%;background:#c97d60;border-radius:8px}.topic-count{color:#827a6f;font-variant-numeric:tabular-nums;white-space:nowrap}.topic-empty{color:var(--muted);font-size:13px;text-align:center;margin:0!important}.topic-note{margin-top:16px!important;font-size:12px;color:#918b7e}@media(max-width:520px){.topic-ranking li{grid-template-columns:20px minmax(55px,90px) minmax(30px,1fr) auto;gap:6px}.topic-cloud{gap:9px 14px;padding:18px 12px}}
 .parser-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 22px}.parser-field{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:13px;color:#625e53}.parser-field input,.parser-field select,.parser-field textarea{width:100%}.parser-field textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid #ddd9cf;border-radius:9px;padding:8px 12px;min-height:76px;resize:vertical}.parser-field input[type=checkbox]{width:18px;min-height:18px;accent-color:var(--accent)}.parser-check{display:flex;align-items:center;gap:8px;min-height:40px}.parser-field small{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.parser-platform{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:#fffefa}.parser-platform summary{cursor:pointer;padding:13px 16px;font-weight:600}.parser-platform .parser-grid{padding:4px 16px 18px}.parser-summary-state{float:right;font-size:12px;font-weight:400;color:var(--muted)}.parser-secret-clear{display:flex;align-items:center;gap:6px;color:#a2513e;font-size:12px}.parser-secret-clear input{min-height:16px!important;width:16px!important}.parser-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:20px}.parser-overview{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 16px;margin:16px 0 20px;background:#f8f5ef;border:1px solid #f0ece4;border-radius:12px}.parser-count{font-size:14px;font-weight:650;color:#4a443a}.parser-count b{color:var(--accent-dark);font-variant-numeric:tabular-nums}.parser-dirty{font-size:12px;color:#a2513e;background:#f7eae2;border-radius:999px;padding:3px 10px}.parser-overview-actions{margin-left:auto;display:flex;gap:8px}.parser-overview-actions button{min-height:32px;padding:4px 12px;font-size:13px}.parser-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:2px 0 16px}.parser-toolbar>input[type=search]{flex:1 1 240px}.parser-toggle{display:flex;align-items:center;gap:7px;font-size:13px;color:#625e53;white-space:nowrap}.parser-toggle input{width:17px;min-height:17px;accent-color:var(--accent)}.parser-platforms{max-height:none}.parser-empty{font-size:13px;color:var(--muted);text-align:center;padding:22px 0}.parser-field[data-changed=true]{position:relative}.parser-field[data-changed=true]>span:first-child:before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}.parser-platform[data-changed=true]>summary{box-shadow:inset 3px 0 0 var(--accent)}.parser-platform[hidden]{display:none}@media(max-width:650px){.parser-grid{grid-template-columns:1fr}.parser-overview-actions{margin-left:0;width:100%}}
-.monitor-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.token-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}.token-toolbar select{min-height:36px;padding:4px 10px}@keyframes tokenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}.token-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;animation:tokenIn .3s ease-out}.token-card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}.token-card span{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}.token-card strong{display:block;font-size:19px;font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:-.01em;overflow-wrap:anywhere}.token-card:first-child strong{color:var(--accent-dark)}.token-daily{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));align-items:end;gap:6px;min-height:110px;padding-top:10px}.token-day{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}.token-day-bar{width:100%;background:linear-gradient(180deg,#dcb8a6,#c66e4e);border-radius:5px 5px 2px 2px;min-height:2px;transition:height .3s ease}.token-day-label{font-size:10px;color:var(--muted);white-space:nowrap;transform:scale(.92)}.token-day-value{font-size:11px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}@media(max-width:800px){.token-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}.event-list li{display:block;padding:12px 0;border-bottom:1px solid var(--line)}.event-list li:last-child{border-bottom:0}.event-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px}.event-time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.event-tag{font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid transparent;white-space:nowrap}.event-tag[data-kind=error]{color:#a2513e;background:#f7eae2;border-color:#efd7ca}.event-tag[data-kind=limit]{color:#8a6a1e;background:#fbf2dc;border-color:#efdfb8}.event-tag[data-kind=warn]{color:#6b6357;background:#f2efe8;border-color:#e4e0d5}.event-platform{font-size:12px;color:var(--accent-dark);font-weight:600}.event-detail{font-size:13px;color:#4a443a;overflow-wrap:anywhere}.event-url{font-size:12px;color:var(--muted);overflow-wrap:anywhere;word-break:break-all;margin-top:3px}.monitor-item{background:#f8f5ef;border:1px solid #f0ece4;border-radius:11px;padding:13px 14px;min-width:0}.monitor-item span{display:block;color:var(--muted);font-size:12px}.monitor-item strong{display:block;font-size:14px;margin-top:5px}.monitor-item strong:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:#b3a998}.monitor-item strong[data-state=ok]:before{background:#6d9d78}.monitor-item strong[data-state=bad]:before{background:#c66e4e}.monitor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}button:disabled{opacity:.55;cursor:not-allowed}.confirm-dialog{width:min(420px,calc(100% - 32px));border:1px solid var(--line);border-radius:16px;background:var(--paper);color:var(--ink);padding:24px;box-shadow:0 18px 70px #29272133}.confirm-dialog::backdrop{background:#29272180}.confirm-dialog h2{margin:0 0 10px;font-size:19px}.confirm-dialog p{color:var(--muted);font-size:14px}.confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}@media(max-width:800px){.monitor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.monitor-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.status-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}.status-toolbar select{min-height:36px;padding:4px 10px}.status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.status-metric{background:#f8f5ef;border:1px solid #f0ece4;border-radius:12px;padding:14px 16px;min-width:0}.status-metric span{display:block;color:var(--muted);font-size:12px}.status-metric strong{display:block;font-size:20px;font-variant-numeric:tabular-nums;margin-top:5px;letter-spacing:-.01em}.status-metric small{display:block;color:#938d81;font-size:12px;margin-top:4px;overflow-wrap:anywhere}.status-bar{height:8px;border-radius:8px;background:#eee9df;overflow:hidden;margin-top:9px}.status-bar i{display:block;height:100%;border-radius:8px;background:#6d9d78;transition:width .35s ease}.status-bar i[data-level=warn]{background:#d9a33f}.status-bar i[data-level=bad]{background:#c66e4e}.status-chart{position:relative;height:170px;margin-top:10px;background:#fbf9f4;border:1px solid #f0ece4;border-radius:12px;padding:10px 12px}.status-chart svg{width:100%;height:100%;display:block}.status-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}.status-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}.status-kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 22px;margin:14px 0 0}.status-kv div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed #efece4;padding:6px 0;font-size:13px}.status-kv span{color:var(--muted)}.status-kv b{font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.status-redact{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}.status-redact label{display:flex;align-items:center;gap:6px;font-size:13px;color:#625e53}.status-redact input{width:17px;min-height:17px;accent-color:var(--accent)}@media(max-width:800px){.status-grid,.status-kv{grid-template-columns:1fr}}.token-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}.token-toolbar select{min-height:36px;padding:4px 10px}@keyframes tokenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}.token-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;animation:tokenIn .3s ease-out}.token-card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}.token-card span{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}.token-card strong{display:block;font-size:19px;font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:-.01em;overflow-wrap:anywhere}.token-card:first-child strong{color:var(--accent-dark)}.token-daily{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));align-items:end;gap:6px;min-height:110px;padding-top:10px}.token-day{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}.token-day-bar{width:100%;background:linear-gradient(180deg,#dcb8a6,#c66e4e);border-radius:5px 5px 2px 2px;min-height:2px;transition:height .3s ease}.token-day-label{font-size:10px;color:var(--muted);white-space:nowrap;transform:scale(.92)}.token-day-value{font-size:11px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}@media(max-width:800px){.token-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}.event-list li{display:block;padding:12px 0;border-bottom:1px solid var(--line)}.event-list li:last-child{border-bottom:0}.event-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px}.event-time{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}.event-tag{font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid transparent;white-space:nowrap}.event-tag[data-kind=error]{color:#a2513e;background:#f7eae2;border-color:#efd7ca}.event-tag[data-kind=limit]{color:#8a6a1e;background:#fbf2dc;border-color:#efdfb8}.event-tag[data-kind=warn]{color:#6b6357;background:#f2efe8;border-color:#e4e0d5}.event-platform{font-size:12px;color:var(--accent-dark);font-weight:600}.event-detail{font-size:13px;color:#4a443a;overflow-wrap:anywhere}.event-url{font-size:12px;color:var(--muted);overflow-wrap:anywhere;word-break:break-all;margin-top:3px}.monitor-item{background:#f8f5ef;border:1px solid #f0ece4;border-radius:11px;padding:13px 14px;min-width:0}.monitor-item span{display:block;color:var(--muted);font-size:12px}.monitor-item strong{display:block;font-size:14px;margin-top:5px}.monitor-item strong:before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:#b3a998}.monitor-item strong[data-state=ok]:before{background:#6d9d78}.monitor-item strong[data-state=bad]:before{background:#c66e4e}.monitor-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}button:disabled{opacity:.55;cursor:not-allowed}.confirm-dialog{width:min(420px,calc(100% - 32px));border:1px solid var(--line);border-radius:16px;background:var(--paper);color:var(--ink);padding:24px;box-shadow:0 18px 70px #29272133}.confirm-dialog::backdrop{background:#29272180}.confirm-dialog h2{margin:0 0 10px;font-size:19px}.confirm-dialog p{color:var(--muted);font-size:14px}.confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}@media(max-width:800px){.monitor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.game-choices{display:flex;flex-wrap:wrap;gap:8px 18px}.game-choices input{width:17px;min-height:17px;accent-color:var(--accent)}.game-safe-link{color:var(--accent-dark);font-size:13px;text-decoration:underline;margin-right:18px}#game-events .event-head{align-items:center}#game-events .event-detail{white-space:pre-wrap}
 </style>
 <div id="auth" class="auth-wrap"><div class="auth-card"><div class="brand-mark" aria-hidden="true">✳</div><section id="login"><h1>欢迎回来</h1><p>登录管理控制台，继续照看你的机器人。</p><form onsubmit="login();return false"><label class="auth-label" for="password">管理员密码</label><input id="password" type="password" autocomplete="current-password" placeholder="请输入密码" required><button class="primary" type="submit">登录控制台　→</button></form></section>
 <section id="changePassword" hidden><h1>设置新密码</h1><p>首次登录需要设置新密码，长度为 12 至 256 位。</p><form onsubmit="changePassword();return false"><label class="auth-label" for="newPassword">新密码</label><input id="newPassword" type="password" autocomplete="new-password" placeholder="至少 12 位" required><label class="auth-label" for="confirmPassword">确认新密码</label><input id="confirmPassword" type="password" autocomplete="new-password" placeholder="再次输入密码" required><button class="primary" type="submit">修改并重新登录　→</button></form></section><p id="message" role="status" aria-live="polite"></p><p class="auth-foot">QQ BOT · 管理员控制台</p></div></div>
-<div id="app" class="shell" hidden><aside class="sidebar"><div class="brand"><span class="brand-mark" aria-hidden="true">✳</span><span>达妮娅 <span style="color:#a39b8d;font-weight:400">/</span> 控制台</span></div><div class="nav-caption">管理空间</div><nav class="nav" aria-label="管理导航"><a class="nav-link active" href="#monitor"><span class="nav-icon">◌</span>运行状态</a><a class="nav-link" href="#memory"><span class="nav-icon">◈</span>用户记忆</a><a class="nav-link" href="#group"><span class="nav-icon">◉</span>群聊话题</a><a class="nav-link" href="#weather"><span class="nav-icon">☼</span>天气助手</a><a class="nav-link" href="#parser"><span class="nav-icon">↗</span>链接解析</a><a class="nav-link" href="#events"><span class="nav-icon">≡</span>解析日志</a><a class="nav-link" href="#tokens"><span class="nav-icon">◫</span>Token 消耗</a></nav><div class="side-bottom"><strong>QQ 机器人</strong>本地管理空间<button type="button" class="side-logout" onclick="logout()">退出登录</button></div></aside>
+<div id="app" class="shell" hidden><aside class="sidebar"><div class="brand"><span class="brand-mark" aria-hidden="true">✳</span><span>达妮娅 <span style="color:#a39b8d;font-weight:400">/</span> 控制台</span></div><div class="nav-caption">管理空间</div><nav class="nav" aria-label="管理导航"><a class="nav-link active" href="#monitor"><span class="nav-icon">◌</span>运行状态</a><a class="nav-link" href="#status"><span class="nav-icon">◧</span>服务器状态</a><a class="nav-link" href="#tokens"><span class="nav-icon">◫</span>Token 消耗</a><a class="nav-link" href="#master"><span class="nav-icon">◇</span>主人识别</a><a class="nav-link" href="#superusers"><span class="nav-icon">⚑</span>超级管理员</a><a class="nav-link" href="#memory"><span class="nav-icon">◈</span>用户记忆</a><a class="nav-link" href="#group"><span class="nav-icon">◉</span>群聊话题</a><a class="nav-link" href="#weather"><span class="nav-icon">☼</span>天气助手</a><a class="nav-link" href="#endfield"><span class="nav-icon">◇</span>终末地</a><a class="nav-link" href="#game-events"><span class="nav-icon">▣</span>游戏活动</a><a class="nav-link" href="#epic"><span class="nav-icon">✧</span>Epic 喜加一</a><a class="nav-link" href="#embedding"><span class="nav-icon">◈</span>知识库 Embedding</a><a class="nav-link" href="#renderer"><span class="nav-icon">◧</span>图片渲染服务</a><a class="nav-link" href="#disaster"><span class="nav-icon">⚠</span>灾害预警</a><a class="nav-link" href="#parser"><span class="nav-icon">↗</span>链接解析</a><a class="nav-link" href="#events"><span class="nav-icon">≡</span>解析日志</a></nav><div class="side-bottom"><strong>QQ 机器人</strong>本地管理空间<button type="button" class="side-logout" onclick="logout()">退出登录</button></div></aside>
 <main class="workspace"><div class="topline"><span>管理空间 <b> /　控制台</b></span><span>记忆 · 群聊 · 天气</span></div><div class="intro"><div class="eyebrow">YOUR BOT, AT A GLANCE</div><h1>你好，欢迎回来。</h1><p>在这里管理她的记忆、群里的话题与天气提醒。</p></div><div id="appMessage" class="notice-slot" role="status" aria-live="polite"></div>
 <section id="monitor" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◌</div><div><h2>运行状态</h2><p class="section-description">查看机器人、QQ 连接与服务状态，自动刷新。</p></div></div><div class="monitor-grid"><div class="monitor-item"><span>机器人服务</span><strong id="botService">检查中</strong></div><div class="monitor-item"><span>QQ 连接</span><strong id="botConnection">检查中</strong></div><div class="monitor-item"><span>SnowLuma 注入</span><strong id="botInjection">检查中</strong></div><div class="monitor-item"><span>知识库服务</span><strong id="botRag">检查中</strong></div><div class="monitor-item"><span>解析器缓存</span><strong id="botCache" title="">检查中</strong></div></div><p id="botDetails" class="hint" role="status" aria-live="polite">正在读取状态</p><div class="monitor-actions"><button id="restartBot" class="primary" onclick="confirmRestart()" disabled>重启机器人</button><button onclick="run(loadBotStatus)">刷新状态</button><span class="hint">重启期间按钮会锁定，启动完成后恢复。</span></div></section>
+<section id="status" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◧</div><div><h2>服务器状态</h2><p class="section-description">实时资源与历史趋势；采样由机器人每 5 分钟写入，QQ 数据来自最近一次落盘。</p></div></div><div class="status-toolbar"><select id="statusRange" onchange="run(loadStatus)"><option value="1">最近 24 小时</option><option value="7">最近 7 天</option><option value="30">最近 30 天</option></select><button type="button" onclick="run(loadStatus)">刷新</button><span id="statusStamp" class="hint"></span></div><div class="status-grid" id="statusMetrics"></div><div class="subsection"><h3>历史趋势 <span id="statusRangeNote" class="hint"></span></h3><div class="status-chart"><svg id="statusChart" viewBox="0 0 600 150" preserveAspectRatio="none" role="img" aria-label="资源趋势"></svg></div><div class="status-legend"><span><i style="background:#c66e4e"></i>CPU</span><span><i style="background:#6d9d78"></i>内存</span></div></div><div class="subsection"><h3>磁盘与进程</h3><div class="status-kv" id="statusDisks"></div><ol id="statusProcs" class="topic-ranking"></ol></div><div class="subsection"><h3>异常事件 <span class="hint">最近 20 条</span></h3><p id="statusEventsEmpty" class="parser-empty" hidden>这个区间没有异常。</p><ul id="statusEvents" class="topic-ranking event-list"></ul></div><div class="subsection"><h3>推送与报表</h3><div class="status-kv" id="statusDelivery"></div></div><div class="subsection"><h3>状态卡设置</h3><div class="status-redact" id="statusRedact"></div><div class="status-toolbar" style="margin-top:14px"><label class="parser-toggle">告警<select id="statusAlertsEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label><label class="parser-toggle">日报<select id="statusReportEnabled"><option value="false">关闭</option><option value="true">开启</option></select></label><label class="parser-toggle">日报时间<input id="statusReportTime" type="time" style="min-height:36px"></label><label class="parser-toggle">推送目标<input id="statusTargets" placeholder="群号，多个用逗号隔开" style="min-height:36px"></label><button class="primary" type="button" onclick="saveStatusConfig()">保存</button><span id="statusSaved" class="hint" role="status"></span></div><p class="hint">基础配置在插件目录的 data/statuscard.json；监测条目等高级项请直接改该文件。</p></div></section><section id="tokens" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◫</div><div><h2>Token 消耗</h2><p class="section-description">按天累计的模型用量，以及各模型的消耗排名。</p></div></div><div class="token-toolbar"><label class="parser-toggle">统计区间<select id="tokenDays" onchange="run(loadTokens)"><option value="1">今天</option><option value="7" selected>近 7 天</option><option value="30">近 30 天</option><option value="90">近 90 天</option></select></label><button type="button" onclick="run(loadTokens)">刷新</button><button type="button" onclick="confirmClearTokens()">清空统计</button><span id="tokenRange" class="hint"></span></div><div class="token-cards"><div class="token-card"><span>今日</span><strong id="tkToday">—</strong></div><div class="token-card"><span>昨日</span><strong id="tkYesterday">—</strong></div><div class="token-card"><span>近 7 天</span><strong id="tkWeek">—</strong></div><div class="token-card"><span>近 30 天</span><strong id="tkMonth">—</strong></div><div class="token-card"><span>累计</span><strong id="tkAll">—</strong></div></div><div class="subsection"><h3>模型排名 <span id="tokenModelNote" class="hint"></span></h3><p id="tokenEmpty" class="parser-empty" hidden>这个区间还没有记录。发出一次对话后就会开始统计。</p><ol id="tokenModels" class="topic-ranking"></ol></div><div class="subsection"><h3>每日用量</h3><div id="tokenDaily" class="token-daily"></div></div></section>
 <dialog id="restartDialog" class="confirm-dialog" aria-labelledby="restartTitle"><h2 id="restartTitle">确认重启机器人？</h2><p>机器人服务将短暂中断，正在处理的消息可能被中止。SnowLuma、QQ 和知识库服务继续运行。</p><div class="confirm-actions"><button onclick="$('restartDialog').close()">取消</button><button class="primary" onclick="restartBotNow()">确认重启</button></div></dialog>
 <section id="master" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◇</div><div><h2>主人识别</h2><p class="section-description">设置当前发言人的身份识别与称呼。</p></div></div><div class="controls"><label for="masterEnabled">身份识别</label><select id="masterEnabled"><option value="true">开启</option><option value="false">关闭</option></select></div><div class="weather-grid" style="margin-top:14px"><label>主人 QQ 号（多个用逗号隔开）<input id="masterOwners" inputmode="numeric" placeholder="留空沿用已有主人配置"></label><label>主人称呼<input id="masterTitle" placeholder="留空沿用人格配置"></label></div><p class="hint">留空使用原有配置；修改主人身份不会授予管理权限。保存后直接生效。</p><button class="primary" onclick="saveMaster()">保存主人识别设置</button><span id="masterSaved" class="hint" role="status"></span></section>
-<section id="memory" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◈</div><div><h2>用户记忆</h2><p class="section-description">查看和管理机器人为每位用户保存的记忆。</p></div></div><div class="controls"><select id="users" aria-label="选择用户" onchange="loadUser()"></select><button onclick="memoryAction('开启')">开启记忆</button><button onclick="memoryAction('关闭')">关闭记忆</button></div><p id="userState" class="status"></p><ul id="memories" class="list"></ul><div class="subsection"><h3>待处理候选</h3><p class="section-description">检查可能重复或冲突的记忆，再决定如何处理。</p><ul id="candidates" class="list"></ul></div></section>
+<section id="superusers" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">⚑</div><div><h2>超级管理员</h2><p class="section-description">能用「限流」「换模型」「查看状态」「解析开关」等管理指令的 QQ 号。改完最多 30 秒生效，不用重启机器人。</p></div></div><div class="controls"><input id="superuserInput" inputmode="numeric" placeholder="QQ 号" aria-label="新增管理员 QQ 号"><button class="primary" type="button" onclick="addSuperuser()">添加</button><button type="button" onclick="run(loadSuperusers)">刷新</button><button type="button" class="danger" onclick="resetSuperusers()">回退到 .env</button><span id="superuserSource" class="hint" role="status"></span></div><p id="superuserState" class="status"></p><ul id="superuserList" class="list"></ul><p class="hint">面板第一次保存后以这份名单为准；<code>nonebot/.env</code> 的 <code>SUPERUSERS</code> 只在还没有名单文件时作为初始值。面板登录密码与这里的 QQ 号是两套东西，改名单不会影响登录。</p></section><section id="memory" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◈</div><div><h2>用户记忆</h2><p class="section-description">查看和管理机器人为每位用户保存的记忆。</p></div></div><div class="controls"><select id="users" aria-label="选择用户" onchange="loadUser()"></select><button onclick="memoryAction('开启')">开启记忆</button><button onclick="memoryAction('关闭')">关闭记忆</button></div><p id="userState" class="status"></p><ul id="memories" class="list"></ul><div class="subsection"><h3>待处理候选</h3><p class="section-description">检查可能重复或冲突的记忆，再决定如何处理。</p><ul id="candidates" class="list"></ul></div></section>
 <section id="group" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◉</div><div><h2>群聊话题</h2><p class="section-description">了解各群近期在聊什么，按群控制统计。</p></div></div><div class="controls"><select id="groups" aria-label="选择群聊" onchange="loadGroup()"></select><input id="newGroup" inputmode="numeric" aria-label="输入群号" placeholder="或输入群号"><button onclick="topicAction('开')">开启统计</button><button onclick="topicAction('关')">关闭</button><button class="danger" onclick="topicAction('清除')">清除统计</button></div><p id="groupState" class="status"></p><div class="topic-visuals"><div class="topic-heading"><h3>近期关键词</h3><small>最近约 7 天 · 最多 20 个词</small></div><div id="topicCloud" class="topic-cloud" aria-label="近期话题词云"><p class="topic-empty">选择群聊后查看话题</p></div><div id="topicRankingWrap" hidden><div class="topic-heading"><h3>热度排行</h3><small>按消息数排序</small></div><ol id="topics" class="topic-ranking"></ol><p class="topic-note">数字表示包含该关键词的消息数；同一条消息中重复出现只计一次。</p></div><div class="subsection" id="speakersWrap" hidden><div class="topic-heading"><h3>发言人排行</h3><small>最近约 7 天 · 最多 20 人</small></div><p class="section-description">只统计启用此功能后收到的群内文字消息。</p><ol id="speakers" class="topic-ranking"></ol><p id="speakersEmpty" class="topic-note" hidden>暂无发言统计。</p><p class="topic-note">显示群昵称与 QQ 号；清除统计时也会清除发言排行。</p></div></div></section>
 <section id="weather" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">☼</div><div><h2>天气助手</h2><p class="section-description">配置和风天气服务，安排需要的天气提醒。</p></div></div><div class="weather-grid"><label>API Host<input id="host" placeholder="你的和风天气 API Host"></label><label>API Key<input id="key" type="password" placeholder="留空保持现有密钥"></label></div><div class="weather-actions"><button class="primary" onclick="saveWeather()">保存配置</button> <small id="weatherState" class="hint"></small></div><div class="subsection"><h3>定时推送 <span class="hint">· 北京时间</span></h3><p class="section-description">添加接收对象后，机器人会按设定时间发送天气预报。</p><div class="controls" style="margin-top:14px"><select id="kind" aria-label="接收类型"><option value="private">私聊</option><option value="group">群聊</option></select><input id="target" inputmode="numeric" placeholder="QQ 号或群号" aria-label="QQ 号或群号"><input id="city" placeholder="城市" aria-label="城市"><input id="clock" type="time" aria-label="推送时间"><button class="primary" onclick="addPush()">添加推送</button></div><ul id="pushes" class="list"></ul></div></section>
-<section id="parser" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">↗</div><div><h2>链接解析</h2><p class="section-description">管理触发规则、媒体处理和各平台解析器。保存后重启机器人生效。</p></div></div><p class="hint">群聊默认自动解析链接；白名单与黑名单每行填写 group:群号 或 private:QQ号。Cookie 和令牌留空时保持原值。</p><div class="parser-overview"><span id="parserCount" class="parser-count">—</span><span id="parserDirty" class="parser-dirty" hidden></span><span class="parser-overview-actions"><button type="button" onclick="parserSetAll(true)">全部开启</button><button type="button" onclick="parserSetAll(false)">全部关闭</button></span></div><div class="parser-toolbar"><input id="parserSearch" type="search" placeholder="搜索设置项，如 cookies、超时、代理" aria-label="搜索设置项" oninput="parserFilter()"><label class="parser-toggle"><input id="parserOnlyEnabled" type="checkbox" onchange="parserFilter()">只看已启用平台</label><label class="parser-toggle"><input id="parserOnlyChanged" type="checkbox" onchange="parserFilter()">只看已改动</label><span id="parserFilterState" class="hint" role="status"></span></div><h3>通用设置</h3><div id="parserGeneral" class="parser-grid"></div><div id="parserNoGeneral" class="parser-empty" hidden>通用设置里没有匹配项。</div><div class="subsection"><h3>平台设置 <span id="parserPlatformCount" class="hint"></span></h3><p class="section-description">展开平台设置启用状态、Cookie 和专属选项。改动过的字段左侧有标记。</p><div id="parserPlatforms" class="parser-platforms"></div><div id="parserNoPlatform" class="parser-empty" hidden>没有匹配的平台。</div></div><div class="parser-actions"><button class="primary" onclick="saveParser()">保存解析设置</button><button onclick="run(loadParser)">重新加载</button><span id="parserSaved" class="hint" role="status"></span></div></section><section id="events" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">≡</div><div><h2>解析日志</h2><p class="section-description">插件报错、视频时长或资源大小超出阈值时记录在这里，最近的在前。</p></div></div><div class="parser-overview"><span id="eventStats" class="parser-count">—</span><span class="parser-overview-actions"><button type="button" onclick="run(loadEvents)">刷新</button><button type="button" onclick="confirmClearEvents()">清空日志</button></span></div><div class="parser-toolbar"><input id="eventSearch" type="search" placeholder="搜索平台、原因或详情" aria-label="搜索日志" oninput="renderEvents()"><label class="parser-toggle"><input id="eventOnlyLimit" type="checkbox" onchange="renderEvents()">只看超出阈值</label><span id="eventFilterState" class="hint"></span></div><p id="eventEmpty" class="parser-empty" hidden>暂时没有记录 —— 说明一切正常。</p><ul id="eventList" class="topic-ranking event-list"></ul></section><section id="tokens" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◫</div><div><h2>Token 消耗</h2><p class="section-description">按天累计的模型用量，以及各模型的消耗排名。</p></div></div><div class="token-toolbar"><label class="parser-toggle">统计区间<select id="tokenDays" onchange="run(loadTokens)"><option value="1">今天</option><option value="7" selected>近 7 天</option><option value="30">近 30 天</option><option value="90">近 90 天</option></select></label><button type="button" onclick="run(loadTokens)">刷新</button><button type="button" onclick="confirmClearTokens()">清空统计</button><span id="tokenRange" class="hint"></span></div><div class="token-cards"><div class="token-card"><span>今日</span><strong id="tkToday">—</strong></div><div class="token-card"><span>昨日</span><strong id="tkYesterday">—</strong></div><div class="token-card"><span>近 7 天</span><strong id="tkWeek">—</strong></div><div class="token-card"><span>近 30 天</span><strong id="tkMonth">—</strong></div><div class="token-card"><span>累计</span><strong id="tkAll">—</strong></div></div><div class="subsection"><h3>模型排名 <span id="tokenModelNote" class="hint"></span></h3><p id="tokenEmpty" class="parser-empty" hidden>这个区间还没有记录。发出一次对话后就会开始统计。</p><ol id="tokenModels" class="topic-ranking"></ol></div><div class="subsection"><h3>每日用量</h3><div id="tokenDaily" class="token-daily"></div></div></section></main></div>
+<section id="endfield" class="card">
+  <div class="card-head"><div class="card-icon" aria-hidden="true">◇</div><div><h2>终末地</h2><p class="section-description">账号查询、图卡、公告与个人提醒。用户在 QQ 私聊中授权和管理绑定，自动签到仅对主动订阅的账号执行。</p></div></div>
+  <div class="parser-overview"><span id="endfieldState" class="parser-count">尚未加载</span><button type="button" onclick="run(loadEndfield)">刷新状态</button></div>
+  <p id="endfieldRuntime" class="hint" role="status"></p>
+  <div class="subsection"><h3>API Key</h3><p id="endfieldKeyState" class="hint"></p>
+    <label class="parser-field"><span>新的 API Key</span><input id="endfieldKey" type="password" autocomplete="new-password" placeholder="留空保持当前密钥"><small>保存后立即生效；面板密钥优先于环境变量。测试输入内容不会保存。</small></label>
+    <div class="parser-actions"><button type="button" class="primary" onclick="endfieldKeyAction('save')">保存密钥</button><button type="button" onclick="endfieldKeyAction('test')">测试连接</button><button type="button" onclick="endfieldKeyAction('import-env')">导入环境变量</button><button type="button" onclick="endfieldKeyAction('delete')">删除面板密钥</button><span id="endfieldKeyNotice" class="hint" role="status"></span></div>
+  </div>
+  <details class="parser-platform" open><summary>功能与提醒设置</summary><form onsubmit="endfieldSaveConfig();return false" style="padding:0 16px 18px"><div id="endfieldFields" class="parser-grid"></div><p class="hint">静默时段不发送个人提醒；签到失败会在静默结束后通知。起止相同表示全天可发送。关闭功能保留绑定与订阅。</p><div class="parser-actions"><button type="submit" class="primary">保存设置</button><span id="endfieldConfigNotice" class="hint" role="status"></span></div></form></details>
+  <div class="subsection"><h3>绑定与订阅</h3><p id="endfieldSubscriptions" class="hint"></p><ul id="endfieldBindings" class="list event-list"></ul><p class="hint">私聊：授权登陆、绑定列表、切换绑定 N、删除绑定 N、订阅理智、订阅调度券、订阅签到。群聊查询需 @ 机器人；只有主人可订阅群公告。</p></div>
+  <details class="parser-platform"><summary>最近运行记录</summary><ul id="endfieldAudit" class="list" style="padding:0 16px 18px"></ul></details>
+</section>
+<section id="game-events" class="card">
+  <div class="card-head"><div class="card-icon" aria-hidden="true">▣</div><div><h2>游戏活动</h2><p class="section-description">管理游戏日历、群聊与私聊订阅、活动到期提醒。保存后由机器人自动读取。</p></div></div>
+  <div class="parser-overview"><span id="gameSummary" class="parser-count">尚未加载</span><span class="parser-overview-actions"><button type="button" onclick="run(loadGameEvents)">刷新状态</button></span></div>
+  <p id="gameRuntime" class="hint" role="status"></p>
+  <details class="parser-platform" open><summary>全局设置与会话限制 <span id="gameSettingsState" class="parser-summary-state"></span></summary>
+    <div style="padding:0 16px 18px">
+      <p class="hint">群聊和私聊分别控制。白名单为空时不限制；黑名单始终优先。禁用后保留订阅并暂停查询与投递。</p>
+      <div id="gameAccessFields" class="parser-grid"></div>
+      <h3>提醒与展示</h3><div id="gameGeneralFields" class="parser-grid"></div>
+      <h3>游戏源</h3><div id="gameSourceFields" class="parser-grid"></div>
+      <h3>游戏显示名</h3><p class="hint">留空恢复原名，只改变显示。</p><div id="gameAliasFields" class="parser-grid"></div>
+      <h3>紧急私聊</h3><p class="hint">默认关闭。每天上限按每人合计；静默时间使用北京时间，起止相同表示全天可用。</p><div id="gameUrgentFields" class="parser-grid"></div>
+      <div class="parser-actions"><button id="gameSaveSettingsButton" class="primary" type="button" onclick="gameSaveSettings()" disabled>保存全局设置</button><button type="button" onclick="gameReloadSettings()">重新加载设置</button><span id="gameSettingsNotice" class="hint" role="status"></span></div>
+    </div>
+  </details>
+  <div class="subsection"><h3>会话订阅</h3><p class="section-description">每条订阅明确绑定机器人账号和群聊 / 私聊目标；被访问策略暂停的目标仍可编辑。</p>
+    <ul id="gameSubscriptions" class="list event-list"></ul>
+    <details id="gameSubscriptionEditor" class="parser-platform"><summary id="gameSubscriptionHeading">新增订阅</summary><form id="gameSubscriptionForm" onsubmit="gameSaveSubscription();return false" style="padding:0 16px 18px">
+      <div class="parser-grid">
+        <label class="parser-field"><span>机器人 QQ 号</span><input id="gameSubBot" list="gameBotIds" inputmode="numeric" required pattern="[1-9][0-9]{0,19}" placeholder="明确填写发送账号"></label>
+        <label class="parser-field"><span>会话类型</span><select id="gameSubKind"><option value="group">群聊</option><option value="private">私聊</option></select></label>
+        <label class="parser-field"><span>群号 / 对方 QQ</span><input id="gameSubTarget" inputmode="numeric" required pattern="[1-9][0-9]{0,19}"></label>
+        <label class="parser-field"><span>订阅开关</span><span class="parser-check"><input id="gameSubEnabled" type="checkbox" checked>启用该订阅</span></label>
+      </div>
+      <h3>订阅游戏</h3><div id="gameSubGames" class="game-choices"></div>
+      <div class="parser-grid" style="margin-top:16px">
+        <label class="parser-field"><span>提醒档位</span><select id="gameSubThresholdMode" onchange="gameThresholdVisibility()"><option value="inherit">使用全局设置</option><option value="custom">自定义天数</option><option value="off">关闭到期提醒</option></select></label>
+        <label class="parser-field"><span>自定义天数</span><input id="gameSubThresholds" placeholder="7, 3, 1" disabled><small>最多 10 档，每档 1–365 天。新活动通知由全局开关控制。</small></label>
+        <label class="parser-field"><span>封面模式</span><select id="gameSubCover"><option value="">使用全局设置</option><option value="image">图片</option><option value="link">封面链接</option><option value="off">关闭封面</option></select></label>
+        <label class="parser-field"><span>包含关键词</span><textarea id="gameSubInclude" rows="3" placeholder="每行一个；留空不过滤"></textarea><small>名称、描述、标签至少命中一个。</small></label>
+        <label class="parser-field"><span>排除关键词</span><textarea id="gameSubExclude" rows="3" placeholder="每行一个；命中即排除"></textarea></label>
+      </div>
+      <p class="hint">已有订阅的账号与目标固定；迁移目标请删除后新建。新加游戏会进入初始化，按设置发送概览并建立提醒基线。</p>
+      <div class="parser-actions"><button class="primary" type="submit">保存订阅</button><button type="button" onclick="gameEditSubscription()">清空并新增</button><span id="gameSubNotice" class="hint" role="status"></span></div>
+    </form></details>
+  </div>
+  <div class="subsection"><h3>紧急私聊目标</h3><p class="section-description">独立指定用户与游戏范围，不自动合并群订阅。本人私聊或来源会话被禁用时暂停。</p>
+    <ul id="gameUrgentTargets" class="list event-list"></ul>
+    <details id="gameUrgentEditor" class="parser-platform"><summary id="gameUrgentHeading">新增紧急目标</summary><form onsubmit="gameSaveUrgent();return false" style="padding:0 16px 18px">
+      <div class="parser-grid">
+        <label class="parser-field"><span>机器人 QQ 号</span><input id="gameUrgentBot" list="gameBotIds" inputmode="numeric" required pattern="[1-9][0-9]{0,19}"></label>
+        <label class="parser-field"><span>接收人 QQ 号</span><input id="gameUrgentUser" inputmode="numeric" required pattern="[1-9][0-9]{0,19}"></label>
+        <label class="parser-field"><span>来源会话（可选）</span><input id="gameUrgentOrigin" placeholder="group:群号 或 private:QQ号"><small>来源群被禁用后，该紧急目标也会暂停。</small></label>
+        <label class="parser-field"><span>目标开关</span><span class="parser-check"><input id="gameUrgentEnabled" type="checkbox" checked>启用该目标</span></label>
+        <label class="parser-field"><span>包含关键词</span><textarea id="gameUrgentInclude" rows="3" placeholder="每行一个"></textarea></label>
+        <label class="parser-field"><span>排除关键词</span><textarea id="gameUrgentExclude" rows="3" placeholder="每行一个"></textarea></label>
+      </div>
+      <h3>提醒游戏</h3><div id="gameUrgentGames" class="game-choices"></div>
+      <div class="parser-actions"><button class="primary" type="submit">保存紧急目标</button><button type="button" onclick="gameEditUrgent()">清空并新增</button><span id="gameUrgentNotice" class="hint" role="status"></span></div>
+    </form></details>
+  </div>
+  <div class="subsection"><h3>数据源与工作队列</h3><p class="section-description">刷新数据只更新缓存；检查推送由指定机器人按当前访问策略处理，不强制重发已经通知的活动。</p>
+    <ul id="gameSources" class="list event-list"></ul>
+    <div class="controls"><label>游戏范围 <select id="gameRefreshGame"></select></label><label>执行账号 <input id="gameRefreshBot" list="gameBotIds" inputmode="numeric" placeholder="检查推送时必填"></label><button type="button" onclick="gameQueue('data')">刷新数据</button><button type="button" onclick="gameQueue('check')">检查并推送</button></div>
+    <p id="gameJobNotice" class="hint" role="status">刷新请求合并排队，完成后至少间隔 60 秒再提交。</p><ul id="gameJobs" class="list event-list"></ul>
+  </div>
+  <div class="subsection"><h3>缓存预览</h3><p class="section-description">只查看已有缓存，最多 30 项。选择订阅可应用该会话过滤条件。</p>
+    <div class="controls"><select id="gamePreviewGame" aria-label="预览游戏"></select><select id="gamePreviewSubscription" aria-label="预览订阅"></select><label class="parser-toggle"><input id="gamePreviewPrevious" type="checkbox">上次非空快照（仅诊断）</label><button type="button" onclick="run(gamePreview)">预览缓存</button></div>
+    <p id="gamePreviewState" class="hint" role="status"></p><ul id="gamePreviewEvents" class="list event-list"></ul>
+  </div>
+  <div class="subsection"><h3>最近投递记录</h3><p id="gameDeliveryCounts" class="hint"></p><ul id="gameDeliveries" class="list event-list"></ul></div>
+  <datalist id="gameBotIds"></datalist>
+</section>
+<section id="epic" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">✧</div><div><h2>Epic 喜加一</h2><p class="section-description">配置 Epic 免费游戏提醒；只在名单变化时推送一次，不按周重复刷屏。</p></div></div><div class="weather-grid"><label>地区<select id="epicCountry"><option value="CN">中国区（CN）</option><option value="US">美区（US）</option></select></label><label>轮询间隔（分钟）<input id="epicPoll" type="number" min="5" max="180" value="30"></label></div><div class="controls" style="margin-top:14px"><label class="parser-toggle"><input id="epicPush" type="checkbox">开启定时推送</label><label class="parser-toggle"><input id="epicUpcoming" type="checkbox">附「即将免费」</label><label class="parser-toggle"><input id="epicCard" type="checkbox">发送卡片</label><button class="primary" onclick="saveEpic()">保存设置</button><button onclick="run(loadEpic)">刷新</button><span id="epicState" class="hint" role="status"></span></div><div class="subsection"><h3>推送目标 <span class="hint">· 群聊 / 私聊</span></h3><p class="section-description">添加接收对象后，机器人在 Epic 换期时推送一次。</p><div class="controls" style="margin-top:14px"><select id="epicKind" aria-label="接收类型"><option value="group">群聊</option><option value="private">私聊</option></select><input id="epicTarget" inputmode="numeric" placeholder="群号或 QQ 号" aria-label="群号或 QQ 号"><button class="primary" onclick="addEpicTarget()">添加目标</button><button onclick="epicImmediate()">立即推送</button></div><ul id="epicTargets" class="list"></ul><p class="hint">「立即推送」需要机器人进程在线；仅超级管理员可用。</p></div></section>
+<section id="embedding" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">◈</div><div><h2>知识库 Embedding</h2><p class="section-description">硅基流动 · BAAI/bge-m3</p></div></div><div class="controls"><input id="embeddingKey" type="password" autocomplete="new-password" aria-label="硅基流动 API Key" placeholder="API Key"><button class="primary" onclick="run(saveEmbedding)">保存密钥</button><button onclick="run(loadEmbedding)">刷新状态</button><span id="embeddingState" class="hint" role="status"></span></div></section>
+<section id="renderer" class="card"><h2>图片渲染服务</h2><p class="section-description">所有卡片共用本机渲染服务，设置保存后立即生效。</p><div class="controls"><input id="rendererUrl" type="url" aria-label="统一渲染地址" placeholder="http://127.0.0.1:3100"><button id="rendererSave" onclick="run(saveRenderer)">保存地址</button><button onclick="run(loadRenderer)">检查状态</button></div><p id="rendererStatus" class="status"></p></section>
+<section id="disaster" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">⚠</div><div><h2>灾害预警</h2><p class="section-description">配置中国气象预警、台风、中国海啸与免鉴权地震附加；远程 Playwright 出图。令牌只保存在机器人数据目录，面板不回显明文。</p></div></div>
+<div class="weather-grid">
+  <label>总开关<select id="disasterEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+  <label>地震附加（免鉴权 Wolfx / P2P / PancakesAPI）<select id="disasterQuakeEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+</div>
+<div class="subsection"><h3>数据源</h3><p class="section-description">Jian 负责中国气象预警与中国海啸，EQSC 负责台风。FAN Studio 已宣布 2026-12-31 停服，不作为长期依赖。</p>
+<div class="weather-grid">
+  <label>Jian 启用<select id="disasterJianEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+  <label>Jian 长期令牌<input id="disasterJianToken" type="password" autocomplete="new-password" placeholder="留空保持现有令牌"></label>
+  <label>Jian 令牌到期日<input id="disasterJianExpiry" type="date"></label>
+</div>
+<label class="parser-toggle" style="margin-top:8px"><input id="disasterJianClear" type="checkbox"> 清除已保存的 Jian 令牌</label>
+<div class="weather-grid" style="margin-top:10px">
+  <label>EQSC 启用<select id="disasterEqscEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+  <label>EQSC 刷新令牌（ARh. 开头）<input id="disasterEqscToken" type="password" autocomplete="new-password" placeholder="ARh...，留空保持现有令牌"></label>
+  <label>EQSC 令牌到期日<input id="disasterEqscExpiry" type="date"></label>
+  <label>EQSC 轮询间隔（秒）<input id="disasterEqscPoll" type="number" min="30" max="600" step="10"></label>
+</div>
+<label class="parser-toggle" style="margin-top:8px"><input id="disasterEqscClear" type="checkbox"> 清除已保存的 EQSC 令牌</label>
+</div>
+<div class="subsection"><h3>远程 Playwright</h3><p class="section-description">机器人只发渲染请求；容器由 compose 单独起。失败会自动回退文字。</p>
+<div class="weather-grid">
+  <label>启用<select id="disasterRenderEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+  <label>统一服务地址<input id="disasterRenderUrl" readonly></label>
+  <label>超时（秒）<input id="disasterRenderTimeout" type="number" min="1" max="120"></label>
+  <label hidden>旧容器备注<input id="disasterRenderContainer"></label>
+</div>
+<div class="weather-actions"><button type="button" onclick="checkDisasterRender()">检查渲染服务</button><span id="disasterRenderStatus" class="hint" role="status">未检查</span></div>
+</div>
+<div class="subsection"><h3>本地过滤</h3><p class="section-description">气象按省、市和区县名称筛选；台风按本地经纬度算距离；海啸按等级。仅筛选气象地区时无需经纬度。</p>
+<div class="weather-grid">
+  <label>启用<select id="disasterLocalEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+  <label>省份（可填多个）<textarea id="disasterProvince" rows="3" maxlength="600" placeholder="如：浙江省、江苏省、海南省" style="display:block;width:100%;margin-top:5px;padding:8px 12px;font:inherit;color:var(--ink);background:var(--paper);border:1px solid #ddd9cf;border-radius:9px;resize:vertical" aria-describedby="disasterProvinceHint"></textarea><span id="disasterProvinceHint" class="hint">用逗号、顿号或换行分隔，任一省份匹配即可；留空不限省份。城市留空覆盖所选省份全域，填写后继续按城市筛选。</span></label>
+  <label>城市 / 区县<input id="disasterCity" maxlength="600" placeholder="如：浙江省杭州市滨江区、浙江省杭州市上城区" aria-describedby="disasterCityHint"><span id="disasterCityHint" class="hint">可填多个城市或完整区县名称，用逗号、顿号或分号分隔；留空不限城市和区县。建议填写完整省市区路径，便于识别上级预警。</span></label>
+  <label>纬度<input id="disasterLatitude" type="number" min="-90" max="90" step="0.0001"></label>
+  <label>经度<input id="disasterLongitude" type="number" min="-180" max="180" step="0.0001"></label>
+</div>
+<p class="hint">填写示例：省份“浙江省”、城市留空，筛选浙江全省；省份“浙江省”、城市“杭州市、宁波市”，筛选这两个城市；省份“浙江省、江苏省”、城市留空，筛选两省。省份和城市同时填写时须分别匹配，不按顺序一一对应。省、市、区县后缀可省略，如“浙江”“杭州”。只接收部分区县时填写“杭州市滨江区、杭州市上城区”，不会匹配杭州其他区县。</p>
+<p class="hint">地区筛选用于气象自动推送和“气象预警”查询，需先开启本地过滤；缺少地区且无法确认归属时不推送。行政编码确认的上级预警仅在完整地区路径匹配时放行：如“浙江省杭州市滨江区”可接收浙江省级和杭州市级预警，“杭州市滨江区”只能确认杭州上级归属。历史记录仍保留被过滤的事件。台风按经纬度距离过滤，未填有效经纬度时不执行距离过滤；海啸按等级过滤。</p>
+</div>
+<div class="subsection"><h3>推送</h3><p class="section-description">V1 只推一个运维群 + 主人私聊；留空表示不推该目标。</p>
+<div class="weather-grid">
+  <label>启用<select id="disasterPushEnabled"><option value="true">开启</option><option value="false">关闭</option></select></label>
+  <label>运维群号<input id="disasterGroupId" inputmode="numeric" placeholder="群号，留空不推群"></label>
+  <label>主人 QQ<input id="disasterOwnerId" inputmode="numeric" placeholder="QQ 号，留空不推私聊"></label>
+</div>
+</div>
+<div class="subsection"><h3>过滤阈值</h3>
+<div class="weather-grid">
+  <label>气象最低颜色<select id="disasterWeatherColor"></select></label>
+  <label>台风最大距离（km）<input id="disasterTyphoonDistance" type="number" min="0" max="5000" step="50"></label>
+  <label>海啸最低等级<select id="disasterTsunamiLevel"></select></label>
+  <label>地震最小震级<input id="disasterEarthquakeMag" type="number" min="0" max="10" step="0.1"></label>
+  <label>地震最大距离（km，0=不限）<input id="disasterEarthquakeDistance" type="number" min="0" max="5000" step="50"></label>
+</div>
+</div>
+<div class="subsection"><h3>事件历史</h3><p class="section-description">最近处理过的事件与 24h/7d 计数；保留 30 天，训练/取消报标 ignored，不推送。</p>
+<div class="weather-actions"><button type="button" onclick="run(loadDisasterHistory)">刷新历史</button><span id="disasterHistoryState" class="hint" role="status">未加载</span></div>
+<div id="disasterHistory"></div>
+</div>
+<div class="weather-actions"><button class="primary" onclick="saveDisaster()">保存灾害预警配置</button><button onclick="run(loadDisaster)">重新加载</button><span id="disasterState" class="hint" role="status"></span></div>
+<p class="hint">保存到 <code>nonebot/data/disaster_warning.json</code>；令牌不会回显。配置保存后由机器人侧读取；数据源接入前不会推送。</p></section>
+<section id="parser" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">↗</div><div><h2>链接解析</h2><p class="section-description">管理触发规则、媒体处理和各平台解析器。保存后重启机器人生效。</p></div></div><p class="hint">群聊默认自动解析链接；白名单与黑名单每行填写 group:群号 或 private:QQ号。Cookie 和令牌留空时保持原值。</p><div class="parser-overview"><span id="parserCount" class="parser-count">—</span><span id="parserDirty" class="parser-dirty" hidden></span><span class="parser-overview-actions"><button type="button" onclick="parserSetAll(true)">全部开启</button><button type="button" onclick="parserSetAll(false)">全部关闭</button></span></div><div class="parser-toolbar"><input id="parserSearch" type="search" placeholder="搜索设置项，如 cookies、超时、代理" aria-label="搜索设置项" oninput="parserFilter()"><label class="parser-toggle"><input id="parserOnlyEnabled" type="checkbox" onchange="parserFilter()">只看已启用平台</label><label class="parser-toggle"><input id="parserOnlyChanged" type="checkbox" onchange="parserFilter()">只看已改动</label><span id="parserFilterState" class="hint" role="status"></span></div><h3>通用设置</h3><div id="parserGeneral" class="parser-grid"></div><div id="parserNoGeneral" class="parser-empty" hidden>通用设置里没有匹配项。</div><div class="subsection"><h3>平台设置 <span id="parserPlatformCount" class="hint"></span></h3><p class="section-description">展开平台设置启用状态、Cookie 和专属选项。改动过的字段左侧有标记。</p><div id="parserPlatforms" class="parser-platforms"></div><div id="parserNoPlatform" class="parser-empty" hidden>没有匹配的平台。</div></div><div class="parser-actions"><button class="primary" onclick="saveParser()">保存解析设置</button><button onclick="run(loadParser)">重新加载</button><span id="parserSaved" class="hint" role="status"></span></div></section><section id="events" class="card"><div class="card-head"><div class="card-icon" aria-hidden="true">≡</div><div><h2>解析日志</h2><p class="section-description">插件报错、视频时长或资源大小超出阈值时记录在这里，最近的在前。</p></div></div><div class="parser-overview"><span id="eventStats" class="parser-count">—</span><span class="parser-overview-actions"><button type="button" onclick="run(loadEvents)">刷新</button><button type="button" onclick="confirmClearEvents()">清空日志</button></span></div><div class="parser-toolbar"><input id="eventSearch" type="search" placeholder="搜索平台、原因或详情" aria-label="搜索日志" oninput="renderEvents()"><label class="parser-toggle"><input id="eventOnlyLimit" type="checkbox" onchange="renderEvents()">只看超出阈值</label><span id="eventFilterState" class="hint"></span></div><p id="eventEmpty" class="parser-empty" hidden>暂时没有记录 —— 说明一切正常。</p><ul id="eventList" class="topic-ranking event-list"></ul></section></main></div>
 <script>
 let csrf='';const $=x=>document.getElementById(x);function notice(t){$('message').textContent=t;$('appMessage').textContent=t}async function api(path,body){let o=body?{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)}:{};let r=await fetch(path,o);let v=await r.json();if(!r.ok)throw Error(v.detail||'操作失败');return v}async function run(f){try{notice('');await f()}catch(e){notice(e.message)}}
+async function loadEmbedding(){let x=await api('/api/embedding');$('embeddingKey').value='';$('embeddingKey').placeholder=x.configured?'已配置，留空保持不变':'请输入 API Key';$('embeddingState').textContent=x.configured?'已配置':'未配置'}
+async function saveEmbedding(){let key=$('embeddingKey').value.trim();if(!key)throw Error('请填写 API Key');await api('/api/embedding',{api_key:key});await loadEmbedding();$('embeddingState').textContent='已保存'}
 async function login(){run(async()=>{let x=await api('/api/login',{password:$('password').value});csrf=x.csrf;$('password').value='';$('login').hidden=true;if(x.must_change){$('changePassword').hidden=false;return}await enterApp()})}
-async function enterApp(){$('auth').hidden=true;$('app').hidden=false;await loadBotStatus();startStatusPolling();await refresh();await loadMaster();await loadParser();await loadEvents();await loadTokens()}
+async function enterApp(){$('auth').hidden=true;$('app').hidden=false;await loadBotStatus();startStatusPolling();await refresh();await loadMaster();await loadParser();await loadEvents();await loadTokens();await loadStatus();await loadSuperusers();await loadEpic();await run(loadRenderer);await run(loadDisaster);await run(loadGameEvents);await run(loadEndfield);await run(loadEmbedding)}
 async function resumeSession(){try{let r=await fetch('/api/session');if(!r.ok)return;let x=await r.json();csrf=x.csrf;if(x.must_change)return;await enterApp()}catch(e){/* 未登录，停在登录框 */}}
 async function changePassword(){run(async()=>{let p=$('newPassword').value;if(p!==$('confirmPassword').value)throw Error('两次输入的密码不一致');await api('/api/password',{password:p});$('newPassword').value='';$('confirmPassword').value='';csrf='';$('changePassword').hidden=true;$('login').hidden=false;notice('密码已修改，请使用新密码登录')})}
 function options(id,items){let el=$(id),old=el.value;el.replaceChildren();items.forEach(x=>{let o=document.createElement('option');o.value=x.value;o.textContent=x.label;el.append(o)});if(items.some(x=>x.value===old))el.value=old}
@@ -48,8 +193,27 @@ let groupRequest=0;
 async function loadGroup(){let id=$('groups').value,request=++groupRequest;$('topics').replaceChildren();$('speakers').replaceChildren();$('topicCloud').replaceChildren();$('topicRankingWrap').hidden=true;$('speakersWrap').hidden=true;function empty(text){let p=document.createElement('p');p.className='topic-empty';p.textContent=text;$('topicCloud').append(p)}if(!id){$('groupState').textContent='暂无群统计';empty('选择群聊后查看话题');return}let x=await api('/api/group/'+encodeURIComponent(id));if(request!==groupRequest)return;$('groupState').textContent=x.enabled?'统计已开启，最近约 7 天':'统计已关闭';if(!x.enabled){empty('该群的话题统计已关闭');return}if(!x.topics.length){empty('暂时还没有话题，等待群里产生更多聊天后再来看看')}else{let max=Math.max(...x.topics.map(t=>t[1]));x.topics.forEach(([word,count],index)=>{let span=document.createElement('span');span.className='topic-word';span.textContent=word;span.title=`${count} 条消息`;span.style.fontSize=`${Math.round(14+16*Math.sqrt(count/max))}px`;$('topicCloud').append(span);rankingRow($('topics'),index,word,count,max)});$('topicRankingWrap').hidden=false}let speakers=x.speakers||[];$('speakersWrap').hidden=false;$('speakersEmpty').hidden=!!speakers.length;if(speakers.length){let max=Math.max(...speakers.map(s=>s.count));speakers.forEach((s,index)=>rankingRow($('speakers'),index,s.display_name?`${s.display_name} (${s.user_id})`:s.user_id,s.count,max))}}
 function rankingRow(list,index,labelText,count,max){let li=document.createElement('li'),rank=document.createElement('span'),label=document.createElement('span'),bar=document.createElement('span'),fill=document.createElement('span'),number=document.createElement('span');rank.className='topic-rank';rank.textContent=String(index+1).padStart(2,'0');label.className='topic-label';label.textContent=labelText;bar.className='topic-bar';bar.setAttribute('aria-hidden','true');fill.className='topic-fill';fill.style.width=`${100*count/max}%`;bar.append(fill);number.className='topic-count';number.textContent=`${count} 条`;li.append(rank,label,bar,number);list.append(li)}
 async function topicAction(action){run(async()=>{let group=$('newGroup').value.trim()||$('groups').value;if(action==='清除'&&!confirm('清除该群的话题统计？'))return;await api('/api/topic',{group,action});$('newGroup').value='';await refresh()})}
+function disasterOptions(id,items){options(id,(items||[]).map(x=>({value:x,label:x})))}
+async function loadRenderer(){
+  const d=await api('/api/renderer');$('rendererUrl').value=d.url;
+  $('rendererUrl').disabled=!d.editable;$('rendererSave').disabled=!d.editable;
+  const s=d.status||{};
+  $('rendererStatus').textContent=`${s.ready===true?'就绪':'未就绪'} · ${s.deployment==='container'?'Docker 容器':s.deployment||'连接不可用'} · 成功 ${s.renders||0} / 失败 ${s.failures||0}${d.editable?'':' · 由进程环境管理'}`;
+  $('disasterRenderUrl').value=d.url;
+}
+async function saveRenderer(){await api('/api/renderer',{url:$('rendererUrl').value.trim()});await loadRenderer()}
+async function loadDisaster(){let d=await api('/api/disaster'),s=d.sources||{},j=s.jian||{},e=s.eqsc||{},q=s.earthquake_free||{},r=d.render||{},l=d.local||{},p=d.push||{},f=d.filters||{};disasterOptions('disasterWeatherColor',(d.options&&d.options.weather_colors)||['白色','蓝色','黄色','橙色','红色']);disasterOptions('disasterTsunamiLevel',(d.options&&d.options.tsunami_levels)||['信息','蓝色','黄色','橙色','红色']);$('disasterEnabled').value=String(!!d.enabled);$('disasterQuakeEnabled').value=String(!!q.enabled);$('disasterJianEnabled').value=String(!!j.enabled);$('disasterJianToken').value='';$('disasterJianToken').placeholder=j.token_configured?'已配置，留空保持':'未配置';$('disasterJianExpiry').value=j.token_expires_at||'';$('disasterJianClear').checked=false;$('disasterEqscEnabled').value=String(!!e.enabled);$('disasterEqscToken').value='';$('disasterEqscToken').placeholder=e.token_configured?'已配置，留空保持':'未配置';$('disasterEqscExpiry').value=e.token_expires_at||'';$('disasterEqscPoll').value=e.poll_seconds??120;$('disasterEqscClear').checked=false;$('disasterRenderEnabled').value=String(!!r.enabled);$('disasterRenderUrl').value=$('rendererUrl').value;$('disasterRenderTimeout').value=r.timeout_seconds??20;$('disasterRenderContainer').value=r.container_name||'';$('disasterLocalEnabled').value=String(!!l.enabled);$('disasterProvince').value=l.province||'';$('disasterCity').value=l.city||'';$('disasterLatitude').value=l.latitude??0;$('disasterLongitude').value=l.longitude??0;$('disasterPushEnabled').value=String(!!p.enabled);$('disasterGroupId').value=p.group_id||'';$('disasterOwnerId').value=p.owner_id||'';$('disasterWeatherColor').value=f.weather_min_color||'黄色';$('disasterTyphoonDistance').value=f.typhoon_max_distance_km??1200;$('disasterTsunamiLevel').value=f.tsunami_min_level||'信息';$('disasterEarthquakeMag').value=f.earthquake_min_magnitude??4.5;$('disasterEarthquakeDistance').value=f.earthquake_max_distance_km??1000;$('disasterState').textContent='配置读取于 '+new Date().toLocaleTimeString();await loadDisasterHistory()}
+async function loadDisasterHistory(){let d=await api('/api/disaster/history?limit=20'),s=d.stats||{},w=s.windows||{},h24=w['24h']||{},h7=w['7d']||{};$('disasterHistoryState').textContent=`24h ${h24.events||0} 条 / 推送 ${h24.pushed||0} · 7d ${h7.events||0} 条 / 推送 ${h7.pushed||0}`;let box=$('disasterHistory');box.replaceChildren();let events=d.events||[];if(!events.length){let p=document.createElement('p');p.className='hint';p.textContent='还没有事件记录';box.append(p);return}events.forEach(x=>{let row=document.createElement('div');row.style.cssText='display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)';let title=document.createElement('strong');title.textContent=`[${x.kind}] ${x.title||x.event_key}`;let meta=document.createElement('span');meta.className='hint';meta.textContent=`${x.status} · ${x.place||'—'} · ${x.last_seen?new Date(x.last_seen*1000).toLocaleString():'—'} · 推送 ${x.push_ok}/${x.pushes}`;row.append(title,meta);box.append(row)})}
+async function saveDisaster(){run(async()=>{let data={enabled:$('disasterEnabled').value==='true',sources:{jian:{enabled:$('disasterJianEnabled').value==='true',token:$('disasterJianToken').value.trim(),token_expires_at:$('disasterJianExpiry').value},eqsc:{enabled:$('disasterEqscEnabled').value==='true',token:$('disasterEqscToken').value.trim(),token_expires_at:$('disasterEqscExpiry').value,poll_seconds:Number($('disasterEqscPoll').value)},earthquake_free:{enabled:$('disasterQuakeEnabled').value==='true'}},render:{enabled:$('disasterRenderEnabled').value==='true',timeout_seconds:Number($('disasterRenderTimeout').value),container_name:$('disasterRenderContainer').value.trim()},local:{enabled:$('disasterLocalEnabled').value==='true',province:$('disasterProvince').value.trim(),city:$('disasterCity').value.trim(),latitude:Number($('disasterLatitude').value),longitude:Number($('disasterLongitude').value)},push:{enabled:$('disasterPushEnabled').value==='true',group_id:$('disasterGroupId').value.trim(),owner_id:$('disasterOwnerId').value.trim()},filters:{weather_min_color:$('disasterWeatherColor').value,typhoon_max_distance_km:Number($('disasterTyphoonDistance').value),tsunami_min_level:$('disasterTsunamiLevel').value,earthquake_min_magnitude:Number($('disasterEarthquakeMag').value),earthquake_max_distance_km:Number($('disasterEarthquakeDistance').value)},clear_jian_token:$('disasterJianClear').checked,clear_eqsc_token:$('disasterEqscClear').checked};await api('/api/disaster',data);$('disasterJianToken').value='';$('disasterEqscToken').value='';$('disasterJianClear').checked=false;$('disasterEqscClear').checked=false;$('disasterState').textContent='已保存';await loadDisaster()})}
+async function checkDisasterRender(){run(async()=>{let d=await api('/api/disaster/render-status');let text;if(!d.configured)text=d.message||'未配置';else if(d.ok)text='在线（已渲染 '+(d.status&&d.status.renders||0)+' 次）';else text=d.ready===false?'服务在线，浏览器未就绪':'离线：'+(d.message||'无响应');$('disasterRenderStatus').textContent=text})}
+
 async function saveWeather(){run(async()=>{await api('/api/weather',{host:$('host').value,key:$('key').value});$('key').value='';await refresh()})}
 async function addPush(){run(async()=>{await api('/api/push',{kind:$('kind').value,target:$('target').value,city:$('city').value,clock:$('clock').value});await refresh()})}
+async function loadEpic(){let s=await api('/api/state'),e=s.epic;$('epicCountry').value=e.country;$('epicPoll').value=e.poll_minutes;$('epicPush').checked=!!e.push_enabled;$('epicUpcoming').checked=!!e.include_upcoming;$('epicCard').checked=!!e.card_enabled;$('epicState').textContent=`${e.targets.length} 个目标`;$('epicTargets').replaceChildren();e.targets.forEach(x=>{let li=document.createElement('li');li.append(document.createTextNode(`${x.kind==='group'?'群':'私聊'} ${x.id} `),button('删除',async()=>{await api('/api/epic',{action:'delete',kind:x.kind,id:x.id});await loadEpic()}));$('epicTargets').append(li)})}
+async function saveEpic(){run(async()=>{await api('/api/epic',{action:'save',country:$('epicCountry').value,poll_minutes:Number($('epicPoll').value),push_enabled:$('epicPush').checked,include_upcoming:$('epicUpcoming').checked,card_enabled:$('epicCard').checked});await loadEpic()})}
+async function addEpicTarget(){run(async()=>{await api('/api/epic',{action:'add',kind:$('epicKind').value,id:$('epicTarget').value.trim()});$('epicTarget').value='';await loadEpic()})}
+async function epicImmediate(){if(!confirm('立即向所有推送目标发送当前 Epic 免费信息？'))return;run(async()=>{await api('/api/epic',{action:'test'});$('epicState').textContent='已请求立即推送，机器人会在 30 秒内处理'})}
+
 async function loadMaster(){let v=await api('/api/master-aware');$('masterEnabled').value=String(v.enabled);$('masterOwners').value=(v.owner_ids||[]).join(', ');$('masterTitle').value=v.title||''}
 async function saveMaster(){run(async()=>{let ids=$('masterOwners').value.trim(),title=$('masterTitle').value.trim();await api('/api/master-aware',{enabled:$('masterEnabled').value==='true',owner_ids:ids?ids.split(/[,，\s]+/):null,title:title||null});$('masterSaved').textContent='已保存';await loadMaster()})}
 let tokenData=null;
@@ -229,7 +393,330 @@ async function loadParser(){let data=await api('/api/parser');parserData=data;pa
   parserRefresh();
 }
 async function saveParser(){run(async()=>{let data={version:parserVersion,general:{},platforms:{},clear_secrets:[]};for(let f of parserFields){if(f.readonly)continue;if(f.clear?.checked){data.clear_secrets.push(f.secretKey);continue}let v;if(f.spec.type==='bool')v=f.input.checked;else if(f.spec.type==='int'){if(!f.input.value||!f.input.checkValidity())throw Error(`${f.spec.description||f.key}须填写范围内的整数`);v=Number(f.input.value);if(!Number.isInteger(v))throw Error(`${f.spec.description||f.key}须为整数`)}else if(f.spec.type==='list')v=f.input.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);else v=f.input.value;if(f.scope==='general')data.general[f.key]=v;else{data.platforms[f.scope]??={};data.platforms[f.scope][f.key]=v}}await api('/api/parser',data);await loadParser();$('parserSaved').textContent='已保存；重启机器人后生效'})}
-document.querySelectorAll('.nav-link').forEach(link=>link.addEventListener('click',()=>{document.querySelectorAll('.nav-link').forEach(item=>item.classList.toggle('active',item===link));if(link.getAttribute('href')==='#events')run(loadEvents);if(link.getAttribute('href')==='#tokens')run(loadTokens)}));
-async function logout(){try{await api('/api/logout',{})}catch(e){}csrf='';if(statusTimer){clearInterval(statusTimer);statusTimer=null}$('app').hidden=true;$('auth').hidden=false;$('login').hidden=false;$('changePassword').hidden=true;notice('')}
+const SVG_NS='http://www.w3.org/2000/svg';
+function statusPct(v){return v==null?'—':`${Number(v).toFixed(1)}%`}
+function statusBytes(v){if(v==null)return '—';let n=Number(v),u=['B','KB','MB','GB','TB','PB'],i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return `${i?n.toFixed(2):Math.round(n)} ${u[i]}`}
+function statusDuration(sec){if(sec==null)return '—';let s=Math.floor(sec),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d} 天 ${h} 小时`:h?`${h} 小时 ${m} 分`:`${m} 分`}
+function statusRow(parent,label,value){let d=document.createElement('div'),s=document.createElement('span'),b=document.createElement('b');s.textContent=label;b.textContent=value==null||value===''?'—':value;d.append(s,b);parent.append(d)}
+function statusMetric(label,value,detail,percent){let box=document.createElement('div');box.className='status-metric';let t=document.createElement('span'),v=document.createElement('strong');t.textContent=label;v.textContent=value;box.append(t,v);if(detail){let d=document.createElement('small');d.textContent=detail;box.append(d)}if(percent!=null){let bar=document.createElement('div'),fill=document.createElement('i');bar.className='status-bar';fill.style.width=`${Math.max(0,Math.min(100,Number(percent)||0))}%`;fill.dataset.level=percent>=90?'bad':percent>=70?'warn':'good';bar.append(fill);box.append(bar)}return box}
+function renderStatusChart(points){
+  const svg=$('statusChart');svg.replaceChildren();
+  const note=text=>{let el=document.createElementNS(SVG_NS,'text');el.setAttribute('x','10');el.setAttribute('y','22');el.setAttribute('fill','#a5a095');el.setAttribute('font-size','12');el.textContent=text;svg.append(el)};
+  if(!points||points.length<2){note('采样点不足 —— 机器人每 5 分钟记一条，攒够两点后这里会出现曲线。');return}
+  const W=600,H=150,P=10,t0=points[0].t,t1=points[points.length-1].t||t0+1,span=Math.max(1,t1-t0);
+  const xOf=t=>P+((t-t0)/span)*(W-P*2),yOf=v=>H-P-((Math.max(0,Math.min(100,Number(v)||0)))/100)*(H-P*2);
+  [0.25,0.5,0.75].forEach(ratio=>{let line=document.createElementNS(SVG_NS,'line');line.setAttribute('x1',P);line.setAttribute('x2',W-P);line.setAttribute('y1',H-P-(H-P*2)*ratio);line.setAttribute('y2',H-P-(H-P*2)*ratio);line.setAttribute('stroke','#eee9df');line.setAttribute('stroke-width','1');svg.append(line)});
+  const draw=(key,color)=>{let d=points.map((p,i)=>`${i?'L':'M'}${xOf(p.t).toFixed(1)} ${yOf(p[key]).toFixed(1)}`).join(' ');let path=document.createElementNS(SVG_NS,'path');path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke',color);path.setAttribute('stroke-width','2.5');path.setAttribute('stroke-linejoin','round');path.setAttribute('stroke-linecap','round');svg.append(path)};
+  draw('m','#6d9d78');draw('c','#c66e4e');
+  let zero=document.createElementNS(SVG_NS,'text');zero.setAttribute('x',P);zero.setAttribute('y',H-1);zero.setAttribute('fill','#a5a095');zero.setAttribute('font-size','10');zero.textContent='0%';svg.append(zero);
+  let full=document.createElementNS(SVG_NS,'text');full.setAttribute('x',P);full.setAttribute('y',P+8);full.setAttribute('fill','#a5a095');full.setAttribute('font-size','10');full.textContent='100%';svg.append(full);
+}
+async function loadStatus(){
+  const days=Number($('statusRange').value||1);
+  const x=await api('/api/status/overview?days='+days);
+  const live=x.live||{},bot=x.bot||{},net=x.network||{},cfg=x.config||{};
+  const stamp=live.collected_at?new Date(live.collected_at*1000).toLocaleTimeString():'—';
+  $('statusStamp').textContent=`实时采集于 ${stamp} · 采样 ${(x.counts&&x.counts.resource_samples)||0} 条 · 数据 ${x.stores&&x.stores.ready?'就绪':'未就绪'}`;
+  const box=$('statusMetrics');box.replaceChildren();
+  box.append(statusMetric('CPU',statusPct(live.cpu&&live.cpu.percent),live.cpu?`${live.cpu.cores||'?'} 核 / ${live.cpu.threads||'?'} 线程`:null,live.cpu&&live.cpu.percent));
+  box.append(statusMetric('内存',statusPct(live.memory&&live.memory.percent),live.memory?`${statusBytes(live.memory.used)} / ${statusBytes(live.memory.total)}`:null,live.memory&&live.memory.percent));
+  box.append(statusMetric('SWAP',statusPct(live.swap&&live.swap.percent),live.swap&&live.swap.total?`${statusBytes(live.swap.used)} / ${statusBytes(live.swap.total)}`:'未启用',live.swap&&live.swap.percent));
+  box.append(statusMetric('宿主',x.host||'—',live.load?`负载 ${live.load}`:null));
+  box.append(statusMetric('运行时长',statusDuration(live.uptime),bot.nick?`${bot.nick}${bot.protocol?` · ${bot.protocol}`:''}`:null));
+  box.append(statusMetric('本月流量',`↑ ${statusBytes(net.month_up)}`,`↓ ${statusBytes(net.month_down)}${net.interface?` · ${net.interface}`:''}`));
+  const disks=$('statusDisks');disks.replaceChildren();
+  for(const disk of live.disks||[])statusRow(disks,disk.path||'磁盘',`${statusPct(disk.percent)}（${statusBytes(disk.used)} / ${statusBytes(disk.total)}）`);
+  statusRow(disks,'收到 / 回复',`${bot.recv!=null?bot.recv:'—'} / ${bot.sent!=null?bot.sent:'—'}`);
+  statusRow(disks,'好友 / 群 / 群员',`${bot.friends??'—'} / ${bot.groups??'—'} / ${bot.members??'—'}`);
+  const procs=$('statusProcs');procs.replaceChildren();
+  const top=(live.process&&live.process.top)||[];
+  const maxCpu=Math.max(1,...top.map(p=>Number(p.cpu)||0));
+  top.forEach((item,index)=>{let li=document.createElement('li'),rank=document.createElement('span'),label=document.createElement('span'),bar=document.createElement('span'),fill=document.createElement('span'),number=document.createElement('span');rank.className='topic-rank';rank.textContent=String(index+1).padStart(2,'0');label.className='topic-label';label.textContent=item.name||'—';bar.className='topic-bar';fill.className='topic-fill';fill.style.width=`${Math.max(2,100*(Number(item.cpu)||0)/maxCpu)}%`;bar.append(fill);number.className='topic-count';number.textContent=`CPU ${statusPct(item.cpu)} · 内存 ${statusPct(item.mem)}`;li.append(rank,label,bar,number);procs.append(li)});
+  renderStatusChart((x.history||{}).points||[]);
+  $('statusRangeNote').textContent=`（最近 ${(x.history||{}).days||days} 天，按机器人实际采样显示）`;
+  const events=$('statusEvents'),list=(x.events||[]);events.replaceChildren();
+  $('statusEventsEmpty').hidden=list.length>0;
+  list.forEach(item=>{let li=document.createElement('li'),head=document.createElement('div'),time=document.createElement('span'),tag=document.createElement('span'),title=document.createElement('span'),detail=document.createElement('div');head.className='event-head';time.className='event-time';time.textContent=new Date((item.ts||0)*1000).toLocaleString();tag.className='event-tag';tag.dataset.kind=item.kind==='recovery'?'warn':'error';tag.textContent=item.kind==='recovery'?'恢复':'异常';title.textContent=item.title||'';head.append(time,tag,title);detail.className='event-detail';detail.textContent=item.detail||'';li.append(head,detail);events.append(li)});
+  const delivery=$('statusDelivery');delivery.replaceChildren();
+  if(x.report)statusRow(delivery,'最近报表',`${x.report.day} · ${x.report.ok?'已发送':'失败'}（${x.report.detail||'—'}）`);
+  else statusRow(delivery,'最近报表','还没有生成过');
+  statusRow(delivery,'日报开关',`${cfg.report&&cfg.report.enabled?'开':'关'} · ${(cfg.report&&cfg.report.time)||'--'}`);
+  statusRow(delivery,'告警开关',`${cfg.alerts&&cfg.alerts.enabled?'开':'关'} · 目标 ${((cfg.alerts&&cfg.alerts.targets)||[]).length} 个`);
+  statusRow(delivery,'监测条目',`已配置 ${((cfg.monitors&&cfg.monitors.items)||[]).length} 项`);
+  const redact=$('statusRedact');redact.replaceChildren();
+  const chosen=(cfg.display&&cfg.display.redact)||[];
+  const labels={hostname:'主机名',process:'进程信息',network:'网络数据',qq_stats:'QQ 统计'};
+  ((cfg.options&&cfg.options.redact)||[]).forEach(key=>{let label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.dataset.redact=key;input.checked=chosen.includes(key);let text=document.createElement('span');text.textContent=labels[key]||key;label.append(input,text);redact.append(label)});
+  $('statusAlertsEnabled').value=cfg.alerts&&cfg.alerts.enabled?'true':'false';
+  $('statusReportEnabled').value=cfg.report&&cfg.report.enabled?'true':'false';
+  $('statusReportTime').value=(cfg.report&&cfg.report.time)||'21:00';
+  $('statusTargets').value=((cfg.alerts&&cfg.alerts.targets)||[]).join(',');
+}
+async function saveStatusConfig(){
+  run(async()=>{
+    const redact=[...document.querySelectorAll('#statusRedact input:checked')].map(el=>el.dataset.redact);
+    const targets=$('statusTargets').value.split(/[,，\s]+/).map(x=>x.trim()).filter(Boolean);
+    await api('/api/status/config',{
+      display:{redact},
+      alerts:{enabled:$('statusAlertsEnabled').value==='true',targets},
+      report:{enabled:$('statusReportEnabled').value==='true',time:$('statusReportTime').value||'21:00'},
+    });
+    $('statusSaved').textContent='已保存；机器人最多一分钟内热加载';
+    await loadStatus();
+  });
+}
+const SUPERUSER_PATTERN=/^[1-9][0-9]{4,19}$/;
+function superuserRow(uid){
+  const li=document.createElement('li'),name=document.createElement('span'),button=document.createElement('button');
+  name.textContent=uid;
+  button.type='button';button.className='danger';button.textContent='移除';
+  button.addEventListener('click',()=>removeSuperuser(uid));
+  li.append(name,button);
+  return li;
+}
+async function loadSuperusers(){
+  const data=await api('/api/superusers');
+  const list=$('superuserList');list.replaceChildren();
+  data.users.forEach(uid=>list.append(superuserRow(uid)));
+  $('superuserSource').textContent=data.source==='file'?'当前来源：面板名单':'当前来源：.env 初始值';
+  $('superuserState').textContent=data.users.length
+    ?`当前 ${data.users.length} 位，最多 ${data.max} 位；名单文件 data/superusers.json`
+    :'当前没有超级管理员：所有管理指令都会失效（面板仍可登录，进来把人加回来即可）';
+}
+async function saveSuperusers(users,note){
+  await api('/api/superusers',{users});
+  await loadSuperusers();
+  $('superuserSource').textContent=note;
+}
+async function addSuperuser(){
+  run(async()=>{
+    const raw=$('superuserInput').value.trim();
+    if(!SUPERUSER_PATTERN.test(raw))throw Error('QQ 号应为 5 到 20 位数字');
+    const data=await api('/api/superusers');
+    if(data.users.includes(raw))throw Error('这个 QQ 号已经在名单里');
+    await saveSuperusers([...data.users,raw],'已添加，最多 30 秒后对机器人生效');
+    $('superuserInput').value='';
+  });
+}
+async function removeSuperuser(uid){
+  run(async()=>{
+    const data=await api('/api/superusers');
+    const next=data.users.filter(item=>item!==uid);
+    if(!next.length&&!confirm('移除后名单为空，所有管理指令都会失效。仍然继续？'))return;
+    await saveSuperusers(next,`已移除 ${uid}，最多 30 秒后对机器人生效`);
+  });
+}
+async function resetSuperusers(){
+  run(async()=>{
+    if(!confirm('删除面板名单，回退到 .env 的 SUPERUSERS？'))return;
+    await api('/api/superusers',{reset:true});
+    await loadSuperusers();
+    $('superuserSource').textContent='已回退到 .env 初始值';
+  });
+}
+let gameData=null,gameSettingsRevision=null,gameSettingFields=[],gameAliasFields=[];
+let gameSettingsDirty=false,gameEditingSubscription=null,gameEditingUrgent=null,gameJobTimer=null;
+const gameSettingsGroups={
+  gameAccessFields:[
+    ['enabled','全局主动推送','bool'],['group_enabled','允许群聊使用','bool'],['private_enabled','允许私聊使用','bool'],
+    ['whitelist','会话白名单','list','每行 group:群号 或 private:QQ号；留空不限制。'],
+    ['blacklist','会话黑名单','list','每行一个；黑名单优先于白名单。'],
+  ],
+  gameGeneralFields:[
+    ['poll_minutes','轮询间隔（分钟）','int',15,180],['thresholds','结束前提醒（天）','thresholds','例如 7, 3, 1；留空关闭到期提醒。'],
+    ['notify_new','通知新活动','bool'],['notify_on_subscribe','订阅时发送活动概览','bool'],
+    ['lookahead_days','展示未来多少天内开始的活动','int',0,365],['max_new_per_cycle','每轮新活动上限','int',1,100],
+    ['remind_only_active','仅提醒已经开始的活动','bool'],['cover_mode','默认封面模式','cover'],
+    ['include_description','显示活动简介','bool'],['use_forward','使用合并转发','bool'],
+    ['cover_max_total_mb','每条图片预算（MiB）','int',1,5],['cover_max_width','封面最大宽度（像素）','int',64,720],
+  ],
+  gameSourceFields:[['source_sra','SRA 日历源','bool'],['source_akedata','AKEData 终末地源','bool'],['source_prts','PRTS 明日方舟源','bool'],['include_gacha','包含终末地卡池','bool']],
+  gameUrgentFields:[
+    ['urgent_enabled','启用紧急私聊','bool'],['urgent_trigger_days','结束前多少天进入紧急提醒','int',1,365],
+    ['urgent_repeat_minutes','重复提醒间隔（分钟）','int',5,1440],['urgent_daily_limit','每天每人最多消息数','int',1,20],
+    ['quiet_start','静默开始小时（北京时间）','int',0,23],['quiet_end','静默结束小时（北京时间）','int',0,23],
+  ],
+};
+function gameElement(tag,text,className){const element=document.createElement(tag);if(text!==undefined)element.textContent=String(text);if(className)element.className=className;return element}
+function gameTime(value){return value?new Date(value*1000).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})+'（北京时间）':'—'}
+function gameName(id,data=gameData){return (data?.games||[]).find(game=>game.id===id)?.name||id}
+function gameLines(value){return [...new Set(String(value).split(/\r?\n/).map(line=>line.trim()).filter(Boolean))]}
+function gameThresholds(value){const tokens=String(value).trim().split(/[,，\s]+/).filter(Boolean);if(tokens.length>10||tokens.some(token=>!/^\d+$/.test(token)||Number(token)<1||Number(token)>365))throw Error('提醒档位须为最多 10 个 1–365 天整数');return [...new Set(tokens.map(Number))].sort((a,b)=>b-a)}
+function gameDirty(){gameSettingsDirty=true;$('gameSettingsState').textContent='有未保存改动';$('gameSettingsNotice').textContent='保存时会检查配置版本，避免覆盖机器人或其他管理员的修改。'}
+function gameFillSettings(data){
+  gameSettingFields=[];gameAliasFields=[];gameSettingsRevision=data.settings.revision;
+  for(const [container,specs] of Object.entries(gameSettingsGroups)){
+    const box=$(container);box.replaceChildren();
+    for(const spec of specs){
+      const [key,title,type]=spec,label=gameElement('label',undefined,'parser-field');
+      const input=document.createElement(type==='list'?'textarea':type==='cover'?'select':'input');
+      input.id='gameSetting_'+key;label.append(gameElement('span',title));
+      if(type==='bool'){
+        input.type='checkbox';input.checked=!!data.settings[key];const wrap=gameElement('span',undefined,'parser-check');wrap.append(input,gameElement('span','开启'));label.append(wrap);
+      }else{
+        if(type==='int'){input.type='number';input.min=spec[3];input.max=spec[4];input.step=1}
+        if(type==='cover')for(const [value,text] of [['image','图片'],['link','封面链接'],['off','关闭封面']]){const option=gameElement('option',text);option.value=value;input.append(option)}
+        input.value=type==='list'?(data.settings[key]||[]).join('\n'):type==='thresholds'?(data.settings[key]||[]).join(', '):data.settings[key];
+        label.append(input);if(type==='list'||type==='thresholds')label.append(gameElement('small',spec[3]));
+      }
+      input.addEventListener('input',gameDirty);input.addEventListener('change',gameDirty);box.append(label);gameSettingFields.push({key,type,input});
+    }
+  }
+  const aliases=$('gameAliasFields');aliases.replaceChildren();
+  for(const game of data.games){const label=gameElement('label',undefined,'parser-field'),input=document.createElement('input');label.append(gameElement('span',game.canonical_name));input.maxLength=40;input.placeholder=game.canonical_name;input.value=data.settings.aliases?.[game.id]||'';input.addEventListener('input',gameDirty);label.append(input);aliases.append(label);gameAliasFields.push({key:game.id,input})}
+  gameSettingsDirty=false;$('gameSettingsState').textContent='版本 '+gameSettingsRevision;$('gameSaveSettingsButton').disabled=false;$('gameSettingsNotice').textContent='';
+}
+async function loadGameEvents(){
+  const data=await api('/api/game-events');gameData=data;
+  if(gameSettingsRevision===null)gameFillSettings(data);
+  gameRenderRows(data);
+  if(!$('gameSubGames').children.length)gameChoices('gameSubGames',[]);
+  if(!$('gameUrgentGames').children.length)gameChoices('gameUrgentGames',[]);
+  if(gameJobTimer){clearTimeout(gameJobTimer);gameJobTimer=null}
+  if((data.jobs||[]).some(job=>['pending','running'].includes(job.status)))gameJobTimer=setTimeout(()=>run(loadGameEvents),5000);
+}
+function gameReloadSettings(){run(async()=>{if(gameSettingsDirty&&!confirm('放弃尚未保存的游戏活动设置并重新加载？'))return;const data=await api('/api/game-events');gameData=data;gameFillSettings(data);gameRenderRows(data)})}
+function gameSaveSettings(){run(async()=>{
+  if(gameSettingsRevision===null)throw Error('请先加载游戏活动设置');
+  const patch={};for(const field of gameSettingFields){let value=field.input.value;if(field.type==='bool')value=field.input.checked;else if(field.type==='int'){if(value.trim()===''||!Number.isInteger(Number(value)))throw Error('数值设置须为整数');value=Number(value)}else if(field.type==='list')value=gameLines(value);else if(field.type==='thresholds')value=gameThresholds(value);patch[field.key]=value}
+  patch.aliases={};for(const field of gameAliasFields)if(field.input.value.trim())patch.aliases[field.key]=field.input.value.trim();
+  const result=await api('/api/game-events/settings',{revision:gameSettingsRevision,settings:patch});gameSettingsRevision=result.settings.revision;gameSettingsDirty=false;await loadGameEvents();gameFillSettings(gameData);$('gameSettingsNotice').textContent='已保存，机器人自动读取；访问策略对每次投递生效。';
+})}
+function gameBotLabel(row,data){if(data.runtime?.possibly_offline)return '心跳较旧，可能离线';return row.bot_online?'账号在线':'账号未在线'}
+function gameRow(title,meta){const li=gameElement('li'),head=gameElement('div',undefined,'event-head');head.append(gameElement('strong',title));li.append(head);if(meta)li.append(gameElement('div',meta,'hint'));return {li,head}}
+function gameRenderRows(data){
+  $('gameSummary').textContent=`${data.subscriptions.length} 个订阅 · 暂停 ${data.subscriptions.filter(row=>row.paused).length} 个 · 初始化中 ${data.initializing_count} 个游戏`;
+  $('gameRuntime').textContent=`最近机器人心跳：${gameTime(data.runtime.at)} · ${data.runtime.possibly_offline?'超过 10 分钟未更新，可能离线':'最近记录账号：'+(data.runtime.bots.join('、')||'无在线账号')}`;
+  const bots=$('gameBotIds');bots.replaceChildren();for(const id of data.bot_ids){const option=gameElement('option',id);option.value=id;bots.append(option)}
+  const subscriptions=$('gameSubscriptions');subscriptions.replaceChildren();
+  for(const row of data.subscriptions){
+    const games=row.games.map(id=>gameName(id,data)).join('、')||'未选择游戏';
+    const state=row.paused?row.pause_reasons.join('；'):'正常启用';
+    const item=gameRow(`${row.kind==='group'?'群聊':'私聊'} ${row.target_id} · Bot ${row.bot_id}`,`${games} · ${state} · ${gameBotLabel(row,data)}`);
+    const stages=Object.entries(row.game_states||{}).map(([id,value])=>`${gameName(id,data)}：${value?.status==='ready'?'已建立基线':'初始化中'}`).join('；');
+    item.li.append(gameElement('div',stages,'hint'));
+    item.head.append(button('编辑',async()=>gameEditSubscription(row)),button(row.enabled?'暂停':'启用',async()=>{await api('/api/game-events/subscriptions',{id:row.id,revision:row.revision,enabled:!row.enabled});await loadGameEvents()}),button('缓存预览',async()=>{if(row.games.length)$('gamePreviewGame').value=row.games[0];$('gamePreviewPrevious').checked=false;$('gamePreviewSubscription').value=row.id;await gamePreview()}),button('删除',async()=>{if(!confirm(`删除 ${row.kind==='group'?'群聊':'私聊'} ${row.target_id} 的订阅？`))return;await api('/api/game-events/subscriptions/'+encodeURIComponent(row.id)+'/delete',{revision:row.revision});if(gameEditingSubscription?.id===row.id)gameEditSubscription();await loadGameEvents()}));
+    subscriptions.append(item.li);
+  }
+  const urgent=$('gameUrgentTargets');urgent.replaceChildren();
+  for(const row of data.urgent_targets){
+    const state=row.paused?row.pause_reasons.join('；'):'正常启用';
+    const item=gameRow(`QQ ${row.user_id} · Bot ${row.bot_id}`,`${row.games.map(id=>gameName(id,data)).join('、')} · ${state} · ${gameBotLabel(row,data)} · 来源 ${row.origin_session||'直接设置'}`);
+    item.head.append(button('编辑',async()=>gameEditUrgent(row)),button(row.enabled?'暂停':'启用',async()=>{await api('/api/game-events/urgent',{bot_id:row.bot_id,user_id:row.user_id,revision:row.revision,enabled:!row.enabled});await loadGameEvents()}),button('删除',async()=>{if(!confirm(`删除 QQ ${row.user_id} 的紧急提醒目标？`))return;await api(`/api/game-events/urgent/${encodeURIComponent(row.bot_id)}/${encodeURIComponent(row.user_id)}/delete`,{revision:row.revision});if(gameEditingUrgent?.bot_id===row.bot_id&&gameEditingUrgent?.user_id===row.user_id)gameEditUrgent();await loadGameEvents()}));urgent.append(item.li);
+  }
+  const sources=$('gameSources');sources.replaceChildren();
+  for(const row of data.sources){const state=!row.enabled?'源已关闭':!row.cached?'暂无缓存':row.stale?'使用旧缓存':!row.complete?'结果不完整':'正常';const item=gameRow(`${gameName(row.game_id,data)} · ${row.source.toUpperCase()} · ${state}`,`成功核验 ${gameTime(row.checked_at)} · 内容获取 ${gameTime(row.fetched_at)} · 有效 ${row.valid_count} / 过期 ${row.expired_count} / 无效 ${row.invalid_count} · 版本 ${row.version||'—'}`);if(row.backoff_until)item.li.append(gameElement('div','退避至 '+gameTime(row.backoff_until),'hint'));if(row.warning)item.li.append(gameElement('div',row.warning,'hint'));if(row.error)item.li.append(gameElement('div',row.error,'event-detail'));if(row.has_previous)item.head.append(button('上次非空快照（诊断）',async()=>{$('gamePreviewGame').value=row.game_id;$('gamePreviewPrevious').checked=true;await gamePreview()}));sources.append(item.li)}
+  const jobs=$('gameJobs');jobs.replaceChildren();const statuses={pending:'排队中',running:'执行中',succeeded:'已完成',failed:'失败'};
+  for(const job of data.jobs||[]){const item=gameRow(`${job.mode==='check'?'检查并推送':'刷新数据'} · ${statuses[job.status]||job.status}`,`${gameTime(job.created_at)} · Bot ${job.bot_id||'数据任务'} · ${(job.games||[]).map(id=>gameName(id,data)).join('、')||'已使用的游戏'} · ${job.id}`);if(job.error)item.li.append(gameElement('div',job.error,'event-detail'));if(job.result)item.li.append(gameElement('div',JSON.stringify(job.result).slice(0,500),'hint'));jobs.append(item.li)}
+  const counts=data.delivery_counts||{};$('gameDeliveryCounts').textContent=`最近 ${data.deliveries.length} 条：成功 ${counts.success||0} · 失败 ${counts.failed||0} · 结果未知 ${counts.unknown||0} · 已拦截 ${counts.blocked||0}`;
+  const deliveries=$('gameDeliveries');deliveries.replaceChildren();const deliveryStatus={success:'成功',failed:'失败',unknown:'结果未知',blocked:'策略拦截'};
+  for(const row of data.deliveries){const item=gameRow(`${deliveryStatus[row.status]||row.status} · ${gameName(row.game_id,data)} · ${row.kind==='group'?'群':'私聊'} ${row.target_id}`,`${gameTime(row.at)} · Bot ${row.bot_id}`);if(row.detail)item.li.append(gameElement('div',row.detail,'event-detail'));deliveries.append(item.li)}
+  options('gamePreviewGame',data.games.map(game=>({value:game.id,label:game.name})));
+  options('gameRefreshGame',[{value:'',label:'默认：已使用的游戏'},...data.games.map(game=>({value:game.id,label:game.name}))]);
+  options('gamePreviewSubscription',[{value:'',label:'不应用会话过滤'},...data.subscriptions.map(row=>({value:row.id,label:`Bot ${row.bot_id} · ${row.kind==='group'?'群':'私聊'} ${row.target_id}`}))]);
+}
+function gameChoices(id,selected){const box=$(id);box.replaceChildren();for(const game of gameData?.games||[]){const label=gameElement('label',undefined,'parser-check'),input=document.createElement('input');input.type='checkbox';input.value=game.id;input.checked=selected.includes(game.id);label.append(input,gameElement('span',game.name));box.append(label)}}
+function gameSelected(id){return [...$(id).querySelectorAll('input:checked')].map(input=>input.value)}
+function gameThresholdVisibility(){$('gameSubThresholds').disabled=$('gameSubThresholdMode').value!=='custom'}
+function gameEditSubscription(row=null){
+  gameEditingSubscription=row;const locked=!!row;
+  for(const id of ['gameSubBot','gameSubKind','gameSubTarget'])$(id).disabled=locked;
+  $('gameSubBot').value=row?.bot_id||'';$('gameSubKind').value=row?.kind||'group';$('gameSubTarget').value=row?.target_id||'';$('gameSubEnabled').checked=row?.enabled??true;
+  $('gameSubThresholdMode').value=row?.thresholds==null?'inherit':row.thresholds.length?'custom':'off';$('gameSubThresholds').value=(row?.thresholds||[]).join(', ');gameThresholdVisibility();
+  $('gameSubCover').value=row?.cover_mode||'';$('gameSubInclude').value=(row?.include_keywords||[]).join('\n');$('gameSubExclude').value=(row?.exclude_keywords||[]).join('\n');gameChoices('gameSubGames',row?.games||[]);
+  $('gameSubscriptionHeading').textContent=row?`编辑 ${row.kind==='group'?'群聊':'私聊'} ${row.target_id}`:'新增订阅';$('gameSubscriptionEditor').open=true;$('gameSubNotice').textContent='';
+}
+function gameSaveSubscription(){run(async()=>{
+  const games=gameSelected('gameSubGames');if(!games.length&&!gameEditingSubscription)throw Error('请至少选择一个游戏');
+  const thresholdMode=$('gameSubThresholdMode').value;
+  const payload={bot_id:$('gameSubBot').value.trim(),kind:$('gameSubKind').value,target_id:$('gameSubTarget').value.trim(),enabled:$('gameSubEnabled').checked,games,thresholds:thresholdMode==='inherit'?null:thresholdMode==='off'?[]:gameThresholds($('gameSubThresholds').value),cover_mode:$('gameSubCover').value||null,include_keywords:gameLines($('gameSubInclude').value),exclude_keywords:gameLines($('gameSubExclude').value)};
+  if(gameEditingSubscription){payload.id=gameEditingSubscription.id;payload.revision=gameEditingSubscription.revision}
+  const saved=await api('/api/game-events/subscriptions',payload);await loadGameEvents();gameEditSubscription(saved.subscription);$('gameSubNotice').textContent='已保存；受限目标保持暂停，不会绕过访问策略。';
+})}
+function gameEditUrgent(row=null){
+  gameEditingUrgent=row;$('gameUrgentBot').disabled=!!row;$('gameUrgentUser').disabled=!!row;
+  $('gameUrgentBot').value=row?.bot_id||'';$('gameUrgentUser').value=row?.user_id||'';$('gameUrgentEnabled').checked=row?.enabled??true;$('gameUrgentOrigin').value=row?.origin_session||'';
+  $('gameUrgentInclude').value=(row?.include_keywords||[]).join('\n');$('gameUrgentExclude').value=(row?.exclude_keywords||[]).join('\n');gameChoices('gameUrgentGames',row?.games||[]);
+  $('gameUrgentHeading').textContent=row?'编辑紧急目标 QQ '+row.user_id:'新增紧急目标';$('gameUrgentEditor').open=true;$('gameUrgentNotice').textContent='';
+}
+function gameSaveUrgent(){run(async()=>{
+  const games=gameSelected('gameUrgentGames');if(!games.length)throw Error('请明确选择紧急提醒游戏');
+  const payload={bot_id:$('gameUrgentBot').value.trim(),user_id:$('gameUrgentUser').value.trim(),enabled:$('gameUrgentEnabled').checked,games,origin_session:$('gameUrgentOrigin').value.trim(),include_keywords:gameLines($('gameUrgentInclude').value),exclude_keywords:gameLines($('gameUrgentExclude').value)};
+  if(gameEditingUrgent)payload.revision=gameEditingUrgent.revision;
+  const saved=await api('/api/game-events/urgent',payload);await loadGameEvents();gameEditUrgent(saved.target);$('gameUrgentNotice').textContent='目标已保存；是否可投递同时取决于全局与访问策略。';
+})}
+function gameQueue(mode){run(async()=>{
+  const bot=$('gameRefreshBot').value.trim(),game=$('gameRefreshGame').value;
+  if(mode==='check'&&!bot)throw Error('检查推送前请明确填写执行机器人账号');
+  const result=await api('/api/game-events/refresh',{mode,bot_id:bot,games:game?[game]:null});
+  const job=result.job;
+  $('gameJobNotice').textContent=`任务 ${job.id}（${job.status}）：${job.mode==='check'?'检查并推送':'仅刷新数据'} · 账号 ${job.bot_id||'全部已使用账号'} · 游戏 ${job.games?.length?job.games.map(id=>gameName(id)).join('、'):'已使用的游戏'}。执行前再次检查访问策略。`;
+  await loadGameEvents();
+})}
+async function gamePreview(){
+  const query=new URLSearchParams({game_id:$('gamePreviewGame').value,subscription_id:$('gamePreviewSubscription').value,diagnostic:String($('gamePreviewPrevious').checked)});
+  const data=await api('/api/game-events/preview?'+query.toString());
+  $('gamePreviewState').textContent=!data.cached?(data.diagnostic?'没有可用的上次非空快照。':'没有缓存，请提交刷新数据任务。'):`${data.diagnostic?'上次非空快照（诊断，不代表当前活动）':data.stale?'旧缓存':'缓存'} · 内容获取 ${gameTime(data.fetched_at)} · 过滤后 ${data.total} 项${data.omitted?'，另有 '+data.omitted+' 项未展示':''}${data.access_allowed?'':' · 当前会话受访问策略限制'}${data.warning?' · '+data.warning:''}${data.error?' · '+data.error:''}`;
+  const list=$('gamePreviewEvents');list.replaceChildren();
+  for(const event of data.events){const item=gameRow(event.name,`${event.start?'开始 '+gameTime(event.start)+' · ':''}结束 ${gameTime(event.end)}`);if(event.tags.length)item.li.append(gameElement('div',event.tags.join(' / '),'hint'));if(event.description)item.li.append(gameElement('p',event.description,'event-detail'));for(const extra of event.extra_times||[])if(extra.at)item.li.append(gameElement('div',extra.label+'：'+gameTime(extra.at),'hint'));for(const [label,url] of [['详情',event.url],['原站封面',event.cover]])if(url){const link=gameElement('a',label+' ↗','game-safe-link');link.href=url;link.target='_blank';link.rel='noopener noreferrer';item.li.append(link)}list.append(item.li)}
+}
+
+let endfieldDirty=false;
+const endfieldFieldSpecs=[
+ ['enabled','启用终末地','checkbox'],['enable_queries','开放查询与同步','checkbox'],
+ ['enable_subscriptions','开放订阅与提醒','checkbox'],['enable_signin','允许手动与自动签到','checkbox'],
+ ['announcement_poll_minutes','公告检查间隔（分钟）','number',5,60],
+ ['sanity_poll_minutes','理智检查间隔（分钟）','number',10,120],
+ ['ticket_poll_minutes','调度券检查间隔（分钟）','number',10,120],
+ ['signin_time','自动签到起始时间','time'],['signin_jitter_minutes','签到分散窗口（分钟）','number',0,120],
+ ['quiet_start','静默开始','time'],['quiet_end','静默结束','time'],
+ ['daily_push_limit','每人每日提醒上限（0 不限）','number',0,100],
+ ['push_retry','发送失败重试次数','number',0,3],['push_disable_after_failures','连续失败停用次数','number',1,10],
+ ['render_timeout_seconds','图卡超时（秒）','number',1,60]
+];
+function endfieldFill(config){
+  const box=$('endfieldFields');box.replaceChildren();
+  for(const [key,label,type,min,max] of endfieldFieldSpecs){
+    const row=document.createElement('label');row.className='parser-field';
+    const caption=document.createElement('span');caption.textContent=label;
+    const input=document.createElement('input');input.id='ef_'+key;input.type=type;
+    if(type==='checkbox'){input.checked=!!config[key];input.style.cssText='width:18px;min-height:18px;accent-color:var(--accent)'}
+    else{input.value=config[key];input.required=true;if(min!==undefined){input.min=min;input.max=max;input.step=1}}
+    input.oninput=()=>{endfieldDirty=true;$('endfieldConfigNotice').textContent='有尚未保存的修改'};
+    row.append(caption,input);box.append(row);
+  }
+}
+async function loadEndfield(){
+  const [status,bindings,subs,audit]=await Promise.all([
+    api('/api/endfield/status'),api('/api/endfield/bindings'),api('/api/endfield/subscriptions'),api('/api/endfield/audit?limit=12')]);
+  $('endfieldState').textContent=`${status.enabled?'已启用':'已暂停'} · ${status.bindings.users} 位用户 / ${status.bindings.items} 个绑定`;
+  $('endfieldRuntime').textContent=`调度器${status.heartbeat_stale?'尚未就绪或心跳过期':'运行中'} · 图卡服务${status.renderer.ready===true?'可用':'不可用'}（共用本机地址） · 自动操作仅对用户主动订阅执行`;
+  const key=status.key;$('endfieldKeyState').textContent=key.configured?`已配置 ${key.masked} · 来源：${key.source==='panel'?'管理面板':'环境变量'}`:'尚未配置密钥';
+  if(!endfieldDirty)endfieldFill(status.config);
+  const counts=subs.counts||{};$('endfieldSubscriptions').textContent=`群公告 ${Object.keys(subs.announcement_groups||{}).length} · 理智 ${counts.sanity||0} · 调度券 ${counts.tickets||0} · 自动签到 ${counts.signin||0}`;
+  const box=$('endfieldBindings');box.replaceChildren();
+  for(const row of bindings.items){const li=document.createElement('li');li.textContent=`${row.user||''} · ${row.role_name||'未命名角色'} · ${row.role_id} · 区服 ${row.server_id} · ${row.is_primary?'主账号':'其他账号'} · ${row.status==='valid'?'有效':'已失效'}`;box.append(li)}
+  if(!bindings.items.length){const li=document.createElement('li');li.textContent='暂无绑定。用户私聊机器人发送「授权登陆」后，绑定会显示在这里。';box.append(li)}
+  const events=$('endfieldAudit');events.replaceChildren();
+  const names={signin:'自动签到',announcement_push:'公告推送',sanity_push:'理智提醒',tickets_push:'调度券提醒',push_failure:'发送失败',rate_limit:'网关限流，暂缓查询',scheduler_error:'调度异常'};
+  for(const row of audit.items.slice().reverse()){const li=document.createElement('li');li.textContent=`${row.ts?new Date(row.ts*1000).toLocaleString():'—'} · ${names[row.event]||row.event} ${row.result||''} ${row.error||''}`;events.append(li)}
+  if(!audit.items.length){const li=document.createElement('li');li.textContent='暂无运行记录';events.append(li)}
+}
+function endfieldSaveConfig(){run(async()=>{
+  const patch={};for(const [key,label,type] of endfieldFieldSpecs){const el=$('ef_'+key);if(!el.checkValidity()){el.reportValidity();return}patch[key]=type==='checkbox'?el.checked:type==='number'?Number(el.value):el.value}
+  await api('/api/endfield/config',patch);endfieldDirty=false;await loadEndfield();$('endfieldConfigNotice').textContent='已保存，机器人自动读取。';
+})}
+function endfieldKeyAction(action){run(async()=>{
+  const api_key=$('endfieldKey').value.trim();let result;
+  if(action==='save'){if(!api_key)throw Error('请填写新的 API Key');result=await api('/api/endfield/key',{api_key});$('endfieldKey').value=''}
+  if(action==='test'){result=await api('/api/endfield/key/test',api_key?{api_key}:{});$('endfieldKeyNotice').textContent=result.ok?'连接成功（仅测试，未保存）':result.message||result.error;return}
+  if(action==='import-env')result=await api('/api/endfield/key/import-env',{});
+  if(action==='delete'){if(!confirm('删除面板密钥？若环境变量中有密钥，将回退使用环境变量。'))return;const response=await fetch('/api/endfield/key',{method:'DELETE',headers:{'X-CSRF-Token':csrf}});result=await response.json();if(!response.ok)throw Error(result.detail||'删除失败')}
+  await loadEndfield();$('endfieldKeyNotice').textContent='密钥设置已更新。';
+})}
+
+document.querySelector('a[href="#endfield"]').addEventListener('click',()=>run(loadEndfield));
+document.querySelectorAll('.nav-link').forEach(link=>link.addEventListener('click',()=>{document.querySelectorAll('.nav-link').forEach(item=>item.classList.toggle('active',item===link));if(link.getAttribute('href')==='#events')run(loadEvents);if(link.getAttribute('href')==='#tokens')run(loadTokens);if(link.getAttribute('href')==='#status')run(loadStatus);if(link.getAttribute('href')==='#superusers')run(loadSuperusers);if(link.getAttribute('href')==='#game-events')run(loadGameEvents);if(link.getAttribute('href')==='#epic')run(loadEpic);if(link.getAttribute('href')==='#disaster')run(loadDisaster)}));
+async function logout(){if(gameJobTimer){clearTimeout(gameJobTimer);gameJobTimer=null}try{await api('/api/logout',{})}catch(e){}csrf='';if(statusTimer){clearInterval(statusTimer);statusTimer=null}$('app').hidden=true;$('auth').hidden=false;$('login').hidden=false;$('changePassword').hidden=true;notice('')}
 resumeSession();
 </script></html>

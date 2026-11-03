@@ -85,8 +85,8 @@ def t_blocks_are_labeled_the_way_prompt_guard_labels():
 
 def t_known_person_gets_the_configured_name_not_the_qq_nickname():
     """跟 prompt_guard 同一套优先级：熟人表 > 名片/昵称 > 群友<QQ号>。"""
-    got = ql.quoted_block([Seg("text", text="娅娅")], {"1690711850": "漂泊者"},
-                          sender_card="对乙酰氨基酚", sender_id="1690711850")
+    got = ql.quoted_block([Seg("text", text="娅娅")], {"10000001": "漂泊者"},
+                          sender_card="对乙酰氨基酚", sender_id="10000001")
     assert got == "〔发言人:漂泊者〕\n娅娅", repr(got)
 
 

@@ -8,6 +8,10 @@ from urllib.request import url2pathname
 from nonebot.adapters.onebot.v11 import Message, MessageSegment
 
 
+# 大图上传常超过默认 30 秒；仅延长解析器的发送回执等待时间。
+SEND_TIMEOUT = 180
+
+
 class BaseMessageComponent:
     pass
 
@@ -96,14 +100,14 @@ class Transport:
         parsed = urlparse(item.file)
         filename = url2pathname(unquote(parsed.path)) if parsed.scheme == 'file' else item.file
         filename = str(self.mapped_path(filename) or filename)
-        await self.bot.call_api('upload_group_file' if group is not None else 'upload_private_file', file=filename, name=item.name, **target)
+        await self.bot.call_api('upload_group_file' if group is not None else 'upload_private_file', file=filename, name=item.name, _timeout=SEND_TIMEOUT, **target)
 
     async def send(self, segments):
         ordinary = Message()
         async def flush():
             nonlocal ordinary
             if ordinary:
-                await self.bot.send(self.event, ordinary)
+                await self.bot.send(self.event, ordinary, _timeout=SEND_TIMEOUT)
                 ordinary = Message()
         for item in segments:
             if isinstance(item, File):
@@ -120,7 +124,7 @@ class Transport:
                 if messages:
                     group = getattr(self.event, 'group_id', None)
                     target = {'group_id': group} if group is not None else {'user_id': self.event.user_id}
-                    await self.bot.call_api('send_group_forward_msg' if group is not None else 'send_private_forward_msg', messages=messages, **target)
+                    await self.bot.call_api('send_group_forward_msg' if group is not None else 'send_private_forward_msg', messages=messages, _timeout=SEND_TIMEOUT, **target)
                 for file in files:
                     await self.upload(file)
             else:

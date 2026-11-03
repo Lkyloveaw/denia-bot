@@ -1,0 +1,2 @@
+# 仅本地/CI 跑测试时需要。生产环境按 requirements.lock 安装。
+pytest==9.2.0

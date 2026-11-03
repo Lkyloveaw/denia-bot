@@ -16,7 +16,7 @@ BOT_DIR = ROOT / 'nonebot'
 PASSWORD_FILE = ROOT / 'tools' / 'snowluma-webui-pass.txt'
 TARGET_UIN = '3892894069'
 HEALTH_URL = 'http://127.0.0.1:8080/dashboard-health'
-# SnowLuma WebUI 的地址。容器部署常把端口绑到内网 IP（如 10.0.0.226:5099）而不是
+# SnowLuma WebUI 的地址。容器部署常把端口绑到内网 IP（如 192.0.2.226:5099）而不是
 # 回环地址，写死 127.0.0.1 会探测失败、面板误报「未运行」。
 # 用 SNOWLUMA_URL 指定；不指定时依次试这几个候选地址。
 SNOWLUMA_URL = os.environ.get('SNOWLUMA_URL', '')

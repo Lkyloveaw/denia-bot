@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -30,6 +31,34 @@ UNLIMITED = 0
 
 DEFAULT_CAP = 20
 DEFAULT_PATH = Path(__file__).resolve().parent / "data" / "gate.json"
+
+GROUP_HELP_LIMIT = 5
+GROUP_HELP_WINDOW = 60
+
+
+class HelpRateLimiter:
+    """Per-group sliding window. Call on the event loop before yielding to render.
+
+    Rejected requests do not extend the window. State is process-local and expires
+    after 60 seconds; expired groups are removed as new requests arrive.
+    """
+
+    def __init__(self):
+        self._groups: dict[str, deque[float]] = {}
+
+    def acquire(self, group: str, *, now: float | None = None) -> bool:
+        now = time.monotonic() if now is None else now
+        cutoff = now - GROUP_HELP_WINDOW
+        for key in list(self._groups):
+            if self._groups[key][-1] <= cutoff:
+                del self._groups[key]
+        requests = self._groups.setdefault(str(group), deque())
+        while requests and requests[0] <= cutoff:
+            requests.popleft()
+        if len(requests) >= GROUP_HELP_LIMIT:
+            return False
+        requests.append(now)
+        return True
 
 UNLIMITED_WORDS = {"不限", "无限", "不限制", "0", "off", "none"}
 _ON_WORDS = {"开", "开启", "on", "true", "1", "是"}
@@ -247,13 +276,13 @@ def parse_cap(text: str) -> int | None:
 
 
 USAGE = (
-    "用法（私聊发，关键词「限流」，写成 .限流 … 也认）：\n"
-    "  限流 上限 <群号> <QQ号> <次数|不限>   给某群某人单独设\n"
-    "  限流 群上限 <群号> <次数|不限>        给整群设\n"
-    "  限流 默认 <次数|不限>                 没被单独设过的人走这个\n"
-    "  限流 查看 [群号]                      看今天的用量\n"
-    "  限流 清零 [群号 [QQ号]]               手动归零\n"
-    "  限流 群内只@ 开|关                    群里是否只回 @ 的消息"
+    "用法（私聊发送）：\n"
+    "  .限流 上限 <群号> <QQ号> <次数|不限>   给某群某人单独设\n"
+    "  .限流 群上限 <群号> <次数|不限>        给整群设\n"
+    "  .限流 默认 <次数|不限>                 没被单独设过的人走这个\n"
+    "  .限流 查看 [群号]                      看今天的用量\n"
+    "  .限流 清零 [群号 [QQ号]]               手动归零\n"
+    "  .限流 群内只@ 开|关                    群里是否只回 @ 的消息"
 )
 
 
@@ -420,7 +449,7 @@ def parse_gate_command(
 # ---------------------------------------------------------------- 帮助列表
 
 HELP_ROWS: list[tuple[str, str]] = [
-    ("help", "看这份指令列表"),
+    ("help", "看这份指令列表；群内无需 @，每群每分钟最多 5 次"),
     ("status", "今日模型用量、运行时长"),
     ("about", "版本、已加载插件、当前模型"),
     ("whoami", "我自己在群里/私聊的身份"),
@@ -428,7 +457,10 @@ HELP_ROWS: list[tuple[str, str]] = [
     ("reset", "清空和我的对话记忆"),
     ("undo", "撤回上一轮对话"),
     ("profile <存档名>", "切换消息存档"),
-    ("kb", "知识库注入：kb ｜ kb on ｜ kb off ｜ kb 查 <问题>"),
+    ("敲 / 抱 / 贴 @用户", "在群聊中与指定用户互动"),
+    ("migrate", "从旧数据库迁移（仅主人）"),
+    ("load / reload / schedule / chat", "模型与聊天管理（仅主人）"),
+    ("kb", "知识库注入：.kb ｜ .kb on ｜ .kb off ｜ .kb 查 <问题>"),
     ("限流 查看 [群号]", "今天每个人被回了几次（仅主人）"),
     ("限流 默认 <次数|不限>", "每人每群每天的回话上限（仅主人）"),
     ("限流 群上限 <群号> <次数|不限>", "给整群设上限（仅主人）"),
@@ -474,12 +506,18 @@ def all_help_rows() -> list[tuple[str, str]]:
 #: 图片菜单的分组。命令名与 `HELP_ROWS` / 注册表里的一致；
 #: 没被任何组接住的指令会落到「其它」组，避免新插件注册的指令在菜单里消失。
 HELP_GROUPS: list[tuple[str, tuple[str, ...]]] = [
-    ("对话", ("help", "status", "about", "whoami", "refresh", "reset", "undo", "profile")),
+    ("对话", ("help", "status", "about", "whoami", "refresh", "reset", "undo", "profile", "敲", "migrate", "load")),
     ("知识库", ("kb",)),
     ("限流", ("限流 查看", "限流 默认", "限流 群上限", "限流 上限", "限流 清零", "限流 群内只@")),
     ("模型", ("模型", "model", "模型 首选", "模型 次选")),
     ("解析", ("开启解析", "关闭解析", "blogin", "登录b站")),
     ("天气", ("天气", "天气预报")),
+    ("游戏活动", ("活动订阅", "活动退订", "活动查询", "活动游戏", "活动列表", "活动过滤", "活动封面", "活动开关", "活动阈值", "活动状态", "活动刷新", "活动私人提醒", "我已知晓")),
+    ("Epic", ("喜加一", "Epic 测试")),
+    ("终末地", ("授权登陆", "绑定列表", "便签", "抽卡记录", "干员列表", "同步抽卡", "危机合约", "帝江号建设", "日历", "订阅理智", "订阅列表")),
+    ("地震", ("地震列表", "地震预警", "地震源状态", "地震测试")),
+    ("灾害", ("气象预警", "台风", "海啸", "灾害源状态")),
+    ("服务器状态", ("查看状态", "状态卡", "状态卡诊断", "测试通知", "立即检测", "预览日报", "预览周报")),
     ("话题与记忆", ("群话题", "记忆")),
 ]
 
@@ -509,18 +547,25 @@ def grouped_help_rows(rows: Iterable[tuple[str, str]]) -> list[tuple[str, list[t
 def help_footer(state: dict) -> str:
     """菜单页脚：当前真实生效的配置。"""
     mode = "群里只回 @ 我的消息" if state["group_at_only"] else "群里叫名字就会回"
-    return f"当前：{mode}｜每人每群每天 {fmt_cap(state['caps']['default'])} 次。"
+    return (f".help：群内无需 @，每群每 {GROUP_HELP_WINDOW} 秒最多 {GROUP_HELP_LIMIT} 次，超限静默。\n"
+            f"普通对话：{mode}｜每人每群每天 {fmt_cap(state['caps']['default'])} 次。")
+
+
+HELP_PREFIX_GUIDE = "指令以英文句点 . 开头；可先 @机器人，部分指令要求 @"
 
 
 def render_help(state: dict, rows: Iterable[tuple[str, str]] = HELP_ROWS) -> str:
     """把指令表排成一屏，末尾带上闸门当前的真实行为 —— 列表要说真话。"""
     rows = list(rows)
     width = max((len(c) for c, _ in rows), default=0) + 2
-    lines = ["可用指令（写成 .指令 或 /指令，私聊直接打词也行）："]
-    lines += [f"  {cmd.ljust(width)}{desc}" for cmd, desc in rows]
-    mode = "群里只回 @ 我的消息" if state["group_at_only"] else "群里叫名字就会回"
-    lines.append(f"当前：{mode}｜每人每群每天 {fmt_cap(state['caps']['default'])} 次。")
+    lines = [f"可用指令（{HELP_PREFIX_GUIDE}）："]
+    lines += [f"  {display_help_command(cmd).ljust(width + 1)}{desc}" for cmd, desc in rows]
+    lines.append(help_footer(state))
     return "\n".join(lines)
+
+
+def display_help_command(command: str) -> str:
+    return ' / '.join('.' + part.lstrip('.') for part in command.split(' / '))
 
 
 def _cap_text(who: str, cap: int) -> str:

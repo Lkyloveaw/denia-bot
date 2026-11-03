@@ -1,0 +1,165 @@
+[
+  {
+    "file": "A.png",
+    "bytes": 1209573,
+    "checks": {
+      "width": 1170,
+      "height": 1810,
+      "images": [
+        {
+          "ok": true,
+          "width": 1024,
+          "height": 1820
+        }
+      ],
+      "cards": [
+        {
+          "contentFits": true,
+          "footerFits": true
+        }
+      ]
+    }
+  },
+  {
+    "file": "B.png",
+    "bytes": 998894,
+    "checks": {
+      "width": 1170,
+      "height": 1810,
+      "images": [
+        {
+          "ok": true,
+          "width": 2560,
+          "height": 1440
+        }
+      ],
+      "cards": [
+        {
+          "contentFits": true,
+          "footerFits": true
+        }
+      ]
+    }
+  },
+  {
+    "file": "C.png",
+    "bytes": 701682,
+    "checks": {
+      "width": 1170,
+      "height": 1810,
+      "images": [
+        {
+          "ok": true,
+          "width": 2048,
+          "height": 2032
+        }
+      ],
+      "cards": [
+        {
+          "contentFits": true,
+          "footerFits": true
+        }
+      ]
+    }
+  },
+  {
+    "file": "D.png",
+    "bytes": 766218,
+    "checks": {
+      "width": 1170,
+      "height": 1810,
+      "images": [
+        {
+          "ok": true,
+          "width": 2560,
+          "height": 1440
+        }
+      ],
+      "cards": [
+        {
+          "contentFits": true,
+          "footerFits": true
+        }
+      ]
+    }
+  },
+  {
+    "file": "comparison.png",
+    "bytes": 704290,
+    "checks": {
+      "width": 1720,
+      "height": 870,
+      "images": [
+        {
+          "ok": true,
+          "width": 1024,
+          "height": 1820
+        },
+        {
+          "ok": true,
+          "width": 2560,
+          "height": 1440
+        },
+        {
+          "ok": true,
+          "width": 2048,
+          "height": 2032
+        },
+        {
+          "ok": true,
+          "width": 2560,
+          "height": 1440
+        }
+      ],
+      "cards": [
+        {
+          "contentFits": true,
+          "footerFits": true
+        },
+        {
+          "contentFits": true,
+          "footerFits": true
+        },
+        {
+          "contentFits": true,
+          "footerFits": true
+        },
+        {
+          "contentFits": true,
+          "footerFits": true
+        }
+      ]
+    }
+  },
+  {
+    "file": "sources.png",
+    "bytes": 1462393,
+    "checks": {
+      "width": 1720,
+      "height": 1130,
+      "images": [
+        {
+          "ok": true,
+          "width": 1024,
+          "height": 1820
+        },
+        {
+          "ok": true,
+          "width": 2560,
+          "height": 1440
+        },
+        {
+          "ok": true,
+          "width": 2048,
+          "height": 2032
+        },
+        {
+          "ok": true,
+          "width": 2560,
+          "height": 1440
+        }
+      ],
+      "cards": []
+    }
+  }
+]

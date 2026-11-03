@@ -95,7 +95,7 @@ class TwitterParser(BaseParser):
             video_url = _text_of(best.get("url"))
             cover = _text_of(best.get("thumbnail_url"))
             if video_url:
-                contents.append(self.create_video_content(video_url, cover or None))
+                contents.append(self.create_video_content(video_url, cover or None, headers=self.fx_headers))
 
         # 有视频时也把配图带上（推文常是「视频 + 图」组合）
         image_urls = [_text_of(m.get("url")) for m in photos]
