@@ -81,6 +81,15 @@ class MemoryV2Test(unittest.TestCase):
         self.assertEqual(m.list_memories(self.db, '1')[0]['text'], '用户喜欢喝咖啡')
         self.assertEqual(len(m.missing_vectors(self.db, '1')), 1)
 
+    def test_old_model_vectors_are_not_compared_to_cloud_vectors(self):
+        m.store(self.db, '1', ['用户喜欢喝咖啡'], 'private', 0)
+        row = m.list_memories(self.db, '1')[0]
+        m.set_vector(self.db, '1', row['id'], row['text'], [1, 0])
+        with m._connect(self.db) as con:
+            con.execute("UPDATE memory_vectors SET model='bge-m3-fp16-v1' WHERE memory_id=?", (row['id'],))
+        self.assertEqual(len(m.missing_vectors(self.db, '1')), 1)
+        self.assertEqual(m.recall(self.db, '1', [1, 0], '完全无关'), [])
+
 
 if __name__ == '__main__':
     unittest.main()

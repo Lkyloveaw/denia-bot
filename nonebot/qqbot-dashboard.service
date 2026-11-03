@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/qqbot/nonebot
-ExecStart=/opt/qqbot/.venv/bin/uvicorn dashboard:app --host 10.0.0.226 --port 8092 --no-access-log
+ExecStart=/opt/qqbot/.venv/bin/uvicorn dashboard:app --host 192.0.2.226 --port 8092 --no-access-log
 Restart=on-failure
 UMask=0077
 

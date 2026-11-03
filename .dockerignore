@@ -1,0 +1,12 @@
+**
+!docker/
+!docker/playwright-renderer/
+!docker/playwright-renderer/Dockerfile
+!docker/playwright-renderer/server.js
+!docker/playwright-renderer/package.json
+!docker/playwright-renderer/package-lock.json
+!nonebot/
+!nonebot/media_parser/
+!nonebot/media_parser/core/
+!nonebot/media_parser/core/resources/
+!nonebot/media_parser/core/resources/HYSongYunLangHeiW-1.ttf

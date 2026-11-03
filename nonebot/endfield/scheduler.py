@@ -415,7 +415,7 @@ class EndfieldScheduler:
             return
         if _in_quiet(now, config) or not self._can_push(now, qq, config):
             return
-        text = "终末地绑定已失效，个人提醒已暂停。请私聊发送「授权登陆」重新授权。"
+        text = "终末地绑定已失效，个人提醒已暂停。请私聊发送「.授权登陆」重新授权。"
         if await self._push_private(qq, text, config):
             await self.subscriptions.update_personal(
                 kind, qq, pending_auth_notification=False, fail_count=0

@@ -389,7 +389,7 @@ API 风格：读接口直接 `return {...}`；写接口 `await req.json()`、用
 ### 9.2 现状：服务与脚本
 
 - Linux 服务清单与启动顺序：`docs/OPERATIONS.md:8-13`、`:18-24`；机器人 `cd nonebot && ../.venv/bin/python bot.py`，面板 `systemctl start qqbot-dashboard`。
-- 面板 systemd 单元：`nonebot/qqbot-dashboard.service:1-13`（`WorkingDirectory=/opt/qqbot/nonebot`，`ExecStart=... uvicorn dashboard:app --host 10.0.0.226 --port 8092`，`UMask=0077`）。
+- 面板 systemd 单元：`nonebot/qqbot-dashboard.service:1-13`（`WorkingDirectory=/opt/qqbot/nonebot`，`ExecStart=... uvicorn dashboard:app --host 192.0.2.226 --port 8092`，`UMask=0077`）。
 - Windows 本机：`启动机器人.bat` / `停止机器人.bat`；测试命令 `cd nonebot && python -m pytest tests -q`（`README.md:115`）。
 - `deploy-linux/docker-compose.yml` 是**历史遗留的 AstrBot 部署**（`:1-19` 自述、`:21-45` 服务是 napcat + astrbot），与当前 NoneBot 架构不符，不要照它加服务。
 

@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 
+import gate_logic as gl
 from nonebot import get_driver, logger, on_message
 from nonebot.adapters import Event
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageSegment
@@ -37,6 +38,12 @@ def _plain(event):
         return ''
 
 
+gl.register_help_rows([
+    ('群话题 查看', '本群近 7 天高频词（群里可用，5 秒冷却）'),
+    ('群话题 开/关/状态/查看/清除 <群号>', '主人私聊管理各群统计'),
+])
+
+
 async def _command_rule(event: Event) -> bool:
     return getattr(event, 'message_type', None) == 'private' and bool(_head.match(_plain(event)))
 
@@ -54,8 +61,9 @@ async def topic_reply(group_id):
     try:
         import weather_image
         async with _render_lock:
-            image = await asyncio.to_thread(weather_image.render, text, 'GROUP TOPICS  /  群话题', '最近约 7 天 · 按消息数排序')
-        return MessageSegment.image(image)
+            pages = await asyncio.to_thread(weather_image.render_pages, text, 'GROUP TOPICS  /  群话题', '最近约 7 天 · 按消息数排序')
+        from card_delivery import image_message
+        return image_message(pages)
     except Exception:
         logger.warning('[group_topics] 图片生成失败，回退文字')
         return text
@@ -81,7 +89,7 @@ async def handle_group_view(event: GroupMessageEvent) -> None:
 async def handle_control(event: Event) -> None:
     args = _head.sub('', _plain(event), count=1).strip().split()
     if len(args) != 2 or args[0] not in ('开', '关', '状态', '查看', '清除') or not args[1].isdigit() or int(args[1]) <= 0:
-        await control.finish('用法：群话题 开/关/状态/查看/清除 群号（仅主人私聊）')
+        await control.finish('用法：.群话题 开/关/状态/查看/清除 群号（仅主人私聊）')
         return
     action, group_id = args
     if action in ('开', '关'):

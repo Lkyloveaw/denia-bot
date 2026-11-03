@@ -16,7 +16,7 @@ T = TypeVar("T")
 CONSENT_TEXT = (
     "绑定前请确认：绑定后，查询所需的账号标识与参数会发送到第三方「协议终端」"
     "end-api.shallow.ink；framework_token 仅保存在本机 data/endfield/bindings.json"
-    "（0600），不会发到群里。回复「同意」继续，回复「取消」退出。"
+    "（0600），不会发到群里。回复「.同意」继续，回复「.取消」退出。"
 )
 
 
@@ -76,14 +76,14 @@ def consent_text() -> str:
 def format_page_footer(page: int, pages: int, command: str) -> str:
     if pages <= 1:
         return ""
-    return f"第 {page}/{pages} 页；发送「{command} {page + 1}」查看下一页"
+    return f"第 {page}/{pages} 页；发送「.{command.lstrip('.')} {page + 1}」查看下一页"
 
 
 def error_text(kind: str) -> str:
     """用户可见的短错误；不包含原始响应/token。"""
     return {
-        "no_binding": "未绑定账号，请私聊发送「授权登陆」或「扫码绑定」。",
-        "invalid_binding": "绑定已失效，请私聊重新授权；或发送「删除绑定 N」清理。",
+        "no_binding": "未绑定账号，请私聊发送「.授权登陆」或「.扫码绑定」。",
+        "invalid_binding": "绑定已失效，请私聊重新授权；或发送「.删除绑定 N」清理。",
         "rate_limit": "请求过于频繁，请稍后再试。",
         "timeout": "网关响应超时，请稍后再试。",
         "render": "图卡渲染失败，已回退文本。",
@@ -266,7 +266,7 @@ def format_attendance(data: Any) -> str:
 
 def format_binding_list(items: Any) -> str:
     if not isinstance(items, list) or not items:
-        return "暂无绑定。请私聊发送「授权登陆」进行绑定。"
+        return "暂无绑定。请私聊发送「.授权登陆」进行绑定。"
     lines = ["绑定列表："]
     for index, item in enumerate(items, 1):
         binding = _mapping(item)
@@ -275,7 +275,7 @@ def format_binding_list(items: Any) -> str:
         primary = "主账号" if binding.get("is_primary") else "非主"
         status = "有效" if binding.get("status") == "valid" else "已失效"
         lines.append(f"{index}. {name} | 区服 {server} | {primary} | {status}")
-    lines.append("发送「切换绑定 N」或「删除绑定 N」管理。")
+    lines.append("发送「.切换绑定 N」或「.删除绑定 N」管理。")
     return "\n".join(lines)
 
 
@@ -287,7 +287,7 @@ def format_gacha_records(data: Any, *, page: int = 1, pages: int = 1) -> str:
     except (TypeError, ValueError):
         total_pages = 1
     if not isinstance(records, list) or not records:
-        return "暂无抽卡记录；可私聊发送「同步抽卡」后再试。"
+        return "暂无抽卡记录；可私聊发送「.同步抽卡」后再试。"
     lines = [f"抽卡记录（第 {page}/{total_pages} 页）："]
     for index, item in enumerate(records[:20], 1):
         record = _mapping(item)
@@ -314,7 +314,7 @@ def format_gacha_stats(data: Any) -> str:
     star6 = _first(stats, "star6_count", "six_star_count", "star_6")
     rate = _first(stats, "star6_rate", "six_star_rate", "rate")
     if total is None and star6 is None:
-        return "暂无抽卡分析；可私聊发送「同步抽卡」后再试。"
+        return "暂无抽卡分析；可私聊发送「.同步抽卡」后再试。"
     parts = [f"总抽数 {total if total is not None else '?'}"]
     if star6 is not None:
         parts.append(f"六星 {star6}")
@@ -331,7 +331,7 @@ def format_operator_list(data: Any, *, page: int = 1, pages: int = 1) -> str:
     except (TypeError, ValueError):
         total_pages = 1
     if not isinstance(rows, list) or not rows:
-        return "暂无干员数据；可私聊发送「同步面板」后再试。"
+        return "暂无干员数据；可私聊发送「.同步面板」后再试。"
     lines = [f"干员列表（第 {page}/{total_pages} 页）："]
     for index, item in enumerate(rows[:20], 1):
         row = _mapping(item)

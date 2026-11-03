@@ -10,6 +10,19 @@ from endfield import logic  # noqa: E402
 
 
 class EndfieldLogicTest(unittest.TestCase):
+    def test_command_hints_include_dot_prefix(self):
+        self.assertIn("「.抽卡记录 2」", logic.format_page_footer(1, 2, "抽卡记录"))
+        self.assertIn("「.授权登陆」", logic.error_text("no_binding"))
+        self.assertIn("「.扫码绑定」", logic.error_text("no_binding"))
+        self.assertIn("「.授权登陆」", logic.format_binding_list([]))
+        self.assertIn("「.删除绑定 N」", logic.error_text("invalid_binding"))
+        bindings = logic.format_binding_list([{"role_name": "A", "status": "valid"}])
+        self.assertIn("「.切换绑定 N」", bindings)
+        self.assertIn("「.删除绑定 N」", bindings)
+        self.assertIn("「.同步抽卡」", logic.format_gacha_records({}))
+        self.assertIn("「.同步抽卡」", logic.format_gacha_stats({}))
+        self.assertIn("「.同步面板」", logic.format_operator_list({}))
+
     def test_mask_token(self):
         self.assertEqual(logic.mask_token(""), "")
         self.assertEqual(logic.mask_token("abcd"), "****")

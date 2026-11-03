@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
+import os
 from typing import Any, Mapping
 
 import httpx
@@ -72,12 +74,19 @@ class EndfieldClient:
         transport: httpx.AsyncBaseTransport | None = None,
         bot_qq: str = "",
         user_qq: str = "",
+        dns_mode: str | None = None,
     ):
         self.api_key = str(api_key or "").strip()
         self.base_url = str(base_url or BASE_URL).rstrip("/")
         self.bot_qq = str(bot_qq or "")
         self.user_qq = str(user_qq or "")
-        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+        self.dns_mode = (dns_mode if dns_mode is not None else os.getenv("ENDFIELD_API_DNS", "system")).strip().lower()
+        if self.dns_mode not in {"system", "alidns"}:
+            raise ValueError("ENDFIELD_API_DNS must be system or alidns")
+        self._dns_address: str | None = None
+        self._client = httpx.AsyncClient(
+            timeout=timeout, transport=transport, trust_env=self.dns_mode == "system"
+        )
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -100,6 +109,33 @@ class EndfieldClient:
             headers["X-Framework-Token"] = framework_token
         return headers
 
+    async def _gateway_address(self) -> str:
+        if self._dns_address:
+            return self._dns_address
+        try:
+            response = await self._client.get(
+                "https://dns.alidns.com/resolve",
+                params={"name": "end-api.shallow.ink", "type": "A"},
+                timeout=5,
+            )
+            response.raise_for_status()
+            if len(response.content) > 65536:
+                raise ValueError("DNS response too large")
+            data = response.json()
+            if not isinstance(data, dict) or data.get("Status") != 0 or not isinstance(data.get("Answer"), list):
+                raise ValueError("invalid DNS response")
+            addresses = [ipaddress.IPv4Address(row.get("data")) for row in data["Answer"]
+                         if isinstance(row, dict) and row.get("type") == 1]
+            if not addresses or not all(
+                address.is_global and not address.is_multicast and not address.is_reserved
+                for address in addresses
+            ):
+                raise ValueError("DNS response contains no valid public address")
+            self._dns_address = str(addresses[0])
+            return self._dns_address
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            raise EndfieldTransientError("gateway DNS lookup failed") from exc
+
     async def _request(
         self,
         method: str,
@@ -113,6 +149,11 @@ class EndfieldClient:
             raise EndfieldConfigError("missing api key", path=path)
         url = f"{self.base_url}{path}"
         headers = self._headers(framework_token)
+        extensions = None
+        if self.dns_mode == "alidns" and self.base_url == BASE_URL:
+            url = str(httpx.URL(url).copy_with(host=await self._gateway_address()))
+            headers["Host"] = "end-api.shallow.ink"
+            extensions = {"sni_hostname": "end-api.shallow.ink"}
         attempts = 2 if method.upper() == "GET" else 1
         last_error: EndfieldTransientError | None = None
         for attempt in range(attempts):
@@ -123,6 +164,7 @@ class EndfieldClient:
                     params=dict(params) if params else None,
                     json=dict(body) if body else None,
                     headers=headers,
+                    extensions=extensions,
                 )
             except httpx.RequestError as exc:
                 last_error = EndfieldTransientError(

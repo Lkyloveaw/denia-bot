@@ -45,7 +45,7 @@ from nonebot.adapters.onebot.v11 import (  # noqa: E402
 )
 
 SELF = 3892894069
-OWNER = 1690711850
+OWNER = 10000001
 OTHER = 982272752
 GRP = 922192732
 OTHER_GRP = 1108838060

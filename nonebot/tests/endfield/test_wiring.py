@@ -123,6 +123,25 @@ def test_binding_payload_extraction():
     assert endfield._binding_from_payload({"status": "approved"}) is None
 
 
+def test_binding_payload_extracts_binding_info():
+    result = endfield._binding_from_payload({
+        "status": "approved",
+        "framework_token": "fixture-token",
+        "user_info": {"nickname": "account"},
+        "binding_info": {"role_id": "123456789", "server_id": "2", "nickname": "role"},
+    })
+    assert result is not None
+    assert result["framework_token"] == "fixture-token"
+    assert result["role_id"] == "123456789"
+    assert result["server_id"] == 2
+    assert result["role_name"] == "role"
+
+    for invalid in ({}, None, [], "invalid"):
+        assert endfield._binding_from_payload({
+            "framework_token": "fixture-token", "binding_info": invalid,
+        }) is None
+
+
 def test_status_approved():
     assert endfield._status_approved({"status": "approved"})
     assert endfield._status_approved({"approved": True})

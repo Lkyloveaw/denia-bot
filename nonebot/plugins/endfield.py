@@ -94,12 +94,12 @@ gate_logic.register_help_rows([
     ("授权登陆 / 扫码绑定", "私聊网页授权；扫码绑定暂未开放"),
     ("绑定列表 / 切换绑定 N / 删除绑定 N", "私聊管理自己的终末地绑定"),
     ("便签 / 理智 / 签到", "终末地账号状态与逐账号签到；群聊需 @"),
-    ("抽卡记录 [页码] / 抽卡分析", "查询终末地抽卡记录与统计"),
-    ("干员列表 [页码] / 干员面板 名称", "查询终末地干员面板"),
+    ("抽卡记录 [页码] / 抽卡分析", "查询抽卡；群聊需 @"),
+    ("干员列表 [页码] / 干员面板 名称", "查询干员；群聊需 @"),
     ("同步抽卡 / 同步面板", "私聊同步自己的终末地数据"),
-    ("危机合约 [名称] / 成就列表", "查询终末地战斗与成就数据"),
-    ("帝江号建设 / 地区建设 / 全服统计", "查询终末地建设与全服数据"),
-    ("日历 / 公告 / 公告最新", "查看终末地活动和公告"),
+    ("危机合约 [名称] / 成就列表", "查询战斗与成就；群聊需 @"),
+    ("帝江号建设 / 地区建设 / 全服统计", "查询建设与全服数据；群聊需 @"),
+    ("日历 / 公告 / 公告最新", "查看活动和公告；群聊需 @"),
     ("订阅理智 / 订阅调度券 / 订阅签到", "私聊开启个人提醒；命令前加「取消」关闭"),
     ("订阅列表 / 订阅公告 / 取消订阅公告", "查看订阅；群公告订阅仅主人可操作"),
 ])
@@ -118,7 +118,8 @@ def _is_group(event: MessageEvent) -> bool:
 
 
 def _text(event: MessageEvent) -> str:
-    return (event.get_plaintext() or "").strip()
+    text = (event.get_plaintext() or "").strip()
+    return text[1:] if text.startswith('.') else text
 
 
 def _is_pending_consent(qq: str) -> bool:
@@ -271,6 +272,9 @@ def _binding_from_payload(data: Mapping[str, Any]) -> dict[str, Any] | None:
     """从授权状态/绑定响应里尽量取 role_id + token；字段未知时返回 None。"""
     nested = data.get("binding") if isinstance(data.get("binding"), Mapping) else {}
     candidates: list[Mapping[str, Any]] = [nested, data]
+    binding_info = data.get("binding_info")
+    if isinstance(binding_info, Mapping):
+        candidates.insert(0, {**data, **binding_info})
     roles = data.get("available_roles")
     if isinstance(roles, list):
         roles = [role for role in roles if isinstance(role, Mapping)]
@@ -360,7 +364,7 @@ async def _handle_consent(event: MessageEvent, qq: str) -> bool:
         return True
     await _store().set_consent(qq)
     _pending_consent.discard(qq)
-    await _send(event, "已记录同意。请发送「授权登陆」继续。")
+    await _send(event, "已记录同意。请发送「.授权登陆」继续。")
     return True
 
 
@@ -400,7 +404,7 @@ async def _authorize(event: MessageEvent, qq: str) -> None:
             _auth_deadlines[qq] = time.monotonic() + 300
             message = await _send(
                 event,
-                f"请打开授权链接完成授权：\n{auth_url}\n链接将在 100 秒后撤回；完成后再次发送「授权登陆」。",
+                f"请打开授权链接完成授权：\n{auth_url}\n链接将在 100 秒后撤回；完成后再次发送「.授权登陆」。",
             )
             message_id = message.get("message_id") if isinstance(message, Mapping) else None
             task = asyncio.create_task(_expire_auth_link(event, message_id, qq, request_id))
@@ -412,10 +416,10 @@ async def _authorize(event: MessageEvent, qq: str) -> None:
         if str(status.get("status") or "").lower() in {"expired", "rejected", "denied", "cancelled", "canceled", "failed"}:
             _pending_auth.pop(qq, None)
             _auth_deadlines.pop(qq, None)
-            await _send(event, "授权已过期或取消，请重新发送「授权登陆」。")
+            await _send(event, "授权已过期或取消，请重新发送「.授权登陆」。")
             return
         if not _status_approved(status):
-            await _send(event, "授权还未完成，请先打开链接授权；完成后再次发送「授权登陆」。")
+            await _send(event, "授权还未完成，请先打开链接授权；完成后再次发送「.授权登陆」。")
             return
         binding = _binding_from_payload(status)
         if not binding:
@@ -429,15 +433,30 @@ async def _authorize(event: MessageEvent, qq: str) -> None:
             _pending_auth.pop(qq, None)
             await _send(event, "最多绑定 3 个角色，请先删除一个绑定。")
             return
-        created = await client.create_binding(
-            binding["framework_token"], qq, is_primary=not existing,
-            role_id=binding["role_id"], server_id=binding["server_id"],
-            nickname=binding["role_name"],
-        )
-        binding_id = created.get("id") or created.get("binding_id")
-        if not binding_id:
-            await _send(event, "网关未返回绑定 ID，请稍后再试。")
-            return
+        previous = next((row for row in existing
+                         if (row["role_id"], row["server_id"]) == (binding["role_id"], binding["server_id"])), None)
+        local_only = False
+        try:
+            created = await client.create_binding(
+                binding["framework_token"], qq, is_primary=not existing,
+                role_id=binding["role_id"], server_id=binding["server_id"],
+                nickname=binding["role_name"],
+            )
+        except ec.EndfieldAuthError as exc:
+            if exc.status != 400 or exc.message.strip() != "请提供 framework_token":
+                raise
+            try:
+                await client.get_note(binding["framework_token"], binding["role_id"], binding["server_id"])
+            except ec.EndfieldError:
+                await _send(event, "网关创建绑定失败，未能验证授权；请稍后重试或联系主人。")
+                return
+            local_only = True
+            binding_id = previous.get("binding_id", "") if previous else ""
+        else:
+            binding_id = created.get("id") or created.get("binding_id")
+            if not binding_id:
+                await _send(event, "网关未返回绑定 ID，请稍后再试。")
+                return
         binding["binding_id"] = str(binding_id)
         await store.add_binding(
             qq, binding, consent_version=int(user.get("consent_version") or 1)
@@ -445,15 +464,14 @@ async def _authorize(event: MessageEvent, qq: str) -> None:
         _pending_auth.pop(qq, None)
         _auth_deadlines.pop(qq, None)
         cleanup_notice = ""
-        previous = next((row for row in existing
-                         if (row["role_id"], row["server_id"]) == (binding["role_id"], binding["server_id"])), None)
         old_id = str(previous.get("binding_id") or "") if previous else ""
         if old_id and old_id != binding["binding_id"]:
             try:
                 await client.delete_binding(old_id, qq)
             except ec.EndfieldError:
                 cleanup_notice = "\n旧网关绑定未能清理，请到协议终端授权管理检查并移除旧绑定。"
-        await _send(event, f"绑定成功：{binding['role_name']}{cleanup_notice}")
+        local_notice = "（已验证并保存至本地，本次未新建网关绑定）" if local_only else ""
+        await _send(event, f"绑定成功：{binding['role_name']}{local_notice}{cleanup_notice}")
     except ec.EndfieldConfigError:
         await _send(event, logic.error_text("config"))
     except ec.EndfieldAuthError:
@@ -584,7 +602,7 @@ async def _handle_query(event: MessageEvent, qq: str, command: logic.Command) ->
             rows = await client.get_panel_chars_all(token)
             row = _find_char(rows, command.arg)
             if row is None:
-                await _send(event, f"没有找到干员「{command.arg}」；可先发送「同步面板」。")
+                await _send(event, f"没有找到干员「{command.arg}」；可先发送「.同步面板」。")
                 return
             template_id = (
                 row.get("template_id")
@@ -745,7 +763,7 @@ async def _handle_binding(event: MessageEvent, qq: str, command: logic.Command) 
             item = await store.set_primary(qq, command.arg)
             await _send(event, f"已切换到：{item.get('role_name') or command.arg}")
         except estore.BindingNotFound:
-            await _send(event, "没有这个绑定；发送「绑定列表」查看序号。")
+            await _send(event, "没有这个绑定；发送「.绑定列表」查看序号。")
     elif command.name == "删除绑定":
         rows = await store.list_bindings(qq)
         index = int(command.arg) - 1
@@ -767,7 +785,7 @@ async def _handle_binding(event: MessageEvent, qq: str, command: logic.Command) 
                     await client.close()
             await _send(event, message)
         else:
-            await _send(event, "没有这个绑定；发送「绑定列表」查看序号。")
+            await _send(event, "没有这个绑定；发送「.绑定列表」查看序号。")
 
 
 KIND_BY_COMMAND = {
@@ -790,7 +808,6 @@ async def _handle_subscription(
             await _send(event, "公告订阅请在群聊中使用。")
             return
         if qq not in _superusers():
-            await _send(event, "只有主人可以订阅/取消群公告。")
             return
         group_id = str(getattr(event, "group_id", "") or "")
         if command.name == "订阅公告":
@@ -854,6 +871,9 @@ async def _handle_subscription(
 @matcher.handle()
 async def _handle_endfield(event: MessageEvent) -> None:
     qq = str(event.get_user_id())
+    command = logic.parse_command(_text(event))
+    if command and command.name in logic.SUB_GROUP_COMMANDS and _is_group(event) and qq not in _superusers():
+        return
     config = _config()
     if not config.enabled:
         await _send(event, "终末地功能已在管理面板暂停。")
@@ -861,7 +881,6 @@ async def _handle_endfield(event: MessageEvent) -> None:
     if await _handle_consent(event, qq):
         return
 
-    command = logic.parse_command(_text(event))
     if command is None:
         return
     if (command.name in logic.QUERY_COMMANDS or command.name in logic.SYNC_COMMANDS) and not config.enable_queries:
@@ -895,7 +914,7 @@ async def _handle_endfield(event: MessageEvent) -> None:
     if command.name == "授权登陆":
         await _handle_auth(event, qq)
     elif command.name == "扫码绑定":
-        await _send(event, "扫码绑定将在二期实现；请先使用「授权登陆」。")
+        await _send(event, "扫码绑定将在二期实现；请先使用「.授权登陆」。")
     elif command.name in logic.SUBSCRIPTION_COMMANDS:
         await _handle_subscription(event, qq, command)
     elif command.name in logic.SYNC_COMMANDS:

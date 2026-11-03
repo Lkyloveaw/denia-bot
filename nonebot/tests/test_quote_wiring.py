@@ -113,7 +113,7 @@ def t_patched_quote_reaches_the_model():
 def t_owner_quote_uses_the_configured_name():
     """被引用的是主人说的话：称呼走 templates.yml（对乙酰氨基酚 → 漂泊者），跟 prompt_guard 同源。"""
     reply = alconna_reply(
-        quoted_ob_message("娅娅"), nickname="对乙酰氨基酚", user_id=1690711850
+        quoted_ob_message("娅娅"), nickname="对乙酰氨基酚", user_id=10000001
     )
     qf.fix_reply(reply)
     assert reply.msg.startswith("〔发言人:"), repr(reply.msg)

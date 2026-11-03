@@ -1,0 +1,34 @@
+[
+  {
+    "file": "statuscard-D.png",
+    "size": [
+      1170,
+      1943
+    ],
+    "bytes": 698631
+  },
+  {
+    "file": "compact-D.png",
+    "size": [
+      1170,
+      1835
+    ],
+    "bytes": 671090
+  },
+  {
+    "file": "narrow-D.png",
+    "size": [
+      760,
+      1262
+    ],
+    "bytes": 451825
+  },
+  {
+    "file": "stress-D.png",
+    "size": [
+      1170,
+      2051
+    ],
+    "bytes": 761608
+  }
+]

@@ -63,6 +63,37 @@ class EndfieldClientTest(unittest.IsolatedAsyncioTestCase):
         data = await client.get_stamina("token", "role-1", 1)
         self.assertEqual(data["stamina"]["current"], 1)
 
+    async def test_optional_dns_preserves_gateway_identity_and_credentials(self):
+        def handler(request):
+            if request.url.host == "dns.alidns.com":
+                self.assertNotIn("x-api-key", request.headers)
+                self.assertEqual(request.url.params["name"], "end-api.shallow.ink")
+                return httpx.Response(200, json={"Status": 0, "Answer": [
+                    {"type": 5, "data": "gateway.example"},
+                    {"type": 1, "data": "8.8.8.8"},
+                ]})
+            self.assertEqual(request.url.host, "8.8.8.8")
+            self.assertEqual(request.headers["host"], "end-api.shallow.ink")
+            self.assertEqual(request.extensions["sni_hostname"], "end-api.shallow.ink")
+            self.assertEqual(request.headers["x-api-key"], "test-key")
+            self.assertEqual(request.headers["x-framework-token"], "fixture-token")
+            return httpx.Response(200, json={"code": 0, "data": {"ok": True}})
+
+        client = self._make(handler, dns_mode="alidns")
+        self.assertTrue((await client.get_note("fixture-token", "role-1", 1))["ok"])
+
+    async def test_optional_dns_rejects_private_address_without_sending_credentials(self):
+        def handler(request):
+            self.assertEqual(request.url.host, "dns.alidns.com")
+            self.assertNotIn("x-api-key", request.headers)
+            return httpx.Response(200, json={"Status": 0, "Answer": [
+                {"type": 1, "data": "127.0.0.1"},
+            ]})
+
+        client = self._make(handler, dns_mode="alidns")
+        with self.assertRaises(EndfieldTransientError):
+            await client.get_note("fixture-token", "role-1", 1)
+
     async def test_missing_key_is_config_error(self):
         client = EndfieldClient("", transport=httpx.MockTransport(lambda r: httpx.Response(200)))
         with self.assertRaises(EndfieldConfigError):

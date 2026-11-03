@@ -87,6 +87,113 @@ def test_auth_creates_gateway_binding(tmp_path, monkeypatch):
     asyncio.run(scenario())
 
 
+def test_auth_creates_gateway_binding_from_binding_info(tmp_path, monkeypatch):
+    monkeypatch.setattr(plugin, 'BINDINGS_PATH', tmp_path / 'bindings.json')
+    monkeypatch.setattr(plugin, '_pending_auth', {'123456': 'request-test'})
+    client = AsyncMock()
+    client.get_authorization_status.return_value = {
+        'status': 'approved', 'framework_token': 'fixture-token',
+        'user_info': {'nickname': 'account'},
+        'binding_info': {'role_id': '123456789', 'server_id': '2', 'nickname': 'role'},
+    }
+    client.create_binding.return_value = {
+        'id': 'gateway-binding', 'role_id': '123456789', 'server_id': 2, 'nickname': 'role',
+    }
+    monkeypatch.setattr(plugin, '_client', lambda *args: client)
+    monkeypatch.setattr(plugin, '_send', AsyncMock())
+
+    async def scenario():
+        await plugin._store().set_consent('123456')
+        await plugin._handle_auth(private_event('授权登陆'), '123456')
+        client.create_binding.assert_awaited_once()
+        row = await plugin._store().get_primary('123456')
+        assert row and row['binding_id'] == 'gateway-binding'
+        assert row['role_id'] == '123456789'
+        assert row['server_id'] == 2
+        assert row['framework_token'] == 'fixture-token'
+        assert '123456' not in plugin._pending_auth
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('note_succeeds', [True, False])
+def test_auth_gateway_missing_token_falls_back_only_after_note_verification(tmp_path, monkeypatch, note_succeeds):
+    monkeypatch.setattr(plugin, 'BINDINGS_PATH', tmp_path / 'bindings.json')
+    monkeypatch.setattr(plugin, '_pending_auth', {'123456': 'request-test'})
+    client = AsyncMock()
+    client.get_authorization_status.return_value = {
+        'status': 'approved', 'framework_token': 'fixture-token',
+        'binding_info': {'role_id': '123456789', 'server_id': '2', 'nickname': 'role'},
+    }
+    client.create_binding.side_effect = ec.EndfieldAuthError('请提供 framework_token', status=400)
+    if not note_succeeds:
+        client.get_note.side_effect = ec.EndfieldTransientError('verification failed')
+    else:
+        client.get_note.return_value = {'stamina': {'current': 1}}
+    monkeypatch.setattr(plugin, '_client', lambda *args: client)
+    send = AsyncMock()
+    monkeypatch.setattr(plugin, '_send', send)
+
+    async def scenario():
+        await plugin._store().set_consent('123456')
+        await plugin._handle_auth(private_event('授权登陆'), '123456')
+        client.get_note.assert_awaited_once_with('fixture-token', '123456789', 2)
+        row = await plugin._store().get_primary('123456')
+        if note_succeeds:
+            assert row and row['role_id'] == '123456789'
+            assert row['framework_token'] == 'fixture-token'
+            assert row['binding_id'] == ''
+            assert '本地' in send.await_args.args[1]
+            assert '123456' not in plugin._pending_auth
+        else:
+            assert row is None
+            assert '未能验证' in send.await_args.args[1]
+    asyncio.run(scenario())
+
+
+def test_auth_other_gateway_auth_failure_does_not_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(plugin, 'BINDINGS_PATH', tmp_path / 'bindings.json')
+    monkeypatch.setattr(plugin, '_pending_auth', {'123456': 'request-test'})
+    client = AsyncMock()
+    client.get_authorization_status.return_value = {
+        'status': 'approved', 'framework_token': 'fixture-token',
+        'binding_info': {'role_id': '123456789', 'server_id': '2', 'nickname': 'role'},
+    }
+    client.create_binding.side_effect = ec.EndfieldAuthError('invalid credential', status=403)
+    monkeypatch.setattr(plugin, '_client', lambda *args: client)
+    monkeypatch.setattr(plugin, '_send', AsyncMock())
+
+    async def scenario():
+        await plugin._store().set_consent('123456')
+        await plugin._handle_auth(private_event('授权登陆'), '123456')
+        client.get_note.assert_not_awaited()
+        assert await plugin._store().get_primary('123456') is None
+    asyncio.run(scenario())
+
+
+def test_local_fallback_preserves_existing_gateway_binding(tmp_path, monkeypatch):
+    monkeypatch.setattr(plugin, 'BINDINGS_PATH', tmp_path / 'bindings.json')
+    monkeypatch.setattr(plugin, '_pending_auth', {'123456': 'request-test'})
+    client = AsyncMock()
+    client.get_authorization_status.return_value = {
+        'status': 'approved', 'framework_token': 'new-token',
+        'binding_info': {'role_id': '123456789', 'server_id': '1', 'nickname': 'role'},
+    }
+    client.create_binding.side_effect = ec.EndfieldAuthError('请提供 framework_token', status=400)
+    client.get_note.return_value = {'stamina': {'current': 1}}
+    monkeypatch.setattr(plugin, '_client', lambda *args: client)
+    monkeypatch.setattr(plugin, '_send', AsyncMock())
+
+    async def scenario():
+        await plugin._store().set_consent('123456')
+        await plugin._store().add_binding('123456', {**_binding('123456789'), 'binding_id': 'old-gateway'})
+        await plugin._handle_auth(private_event('授权登陆'), '123456')
+        row = await plugin._store().get_primary('123456')
+        assert row['binding_id'] == 'old-gateway'
+        assert row['framework_token'] == 'new-token'
+        client.delete_binding.assert_not_awaited()
+    asyncio.run(scenario())
+
+
 def test_expired_auth_clears_session(tmp_path, monkeypatch):
     monkeypatch.setattr(plugin, 'BINDINGS_PATH', tmp_path / 'bindings.json')
     monkeypatch.setattr(plugin, '_pending_auth', {'123456': 'expired-request'})

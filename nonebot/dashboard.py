@@ -13,8 +13,20 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import memory_logic as memory
 import group_topics_logic as topics
 import weather_service as weather
+import epic_free_config as epic_config
+import game_event_panel
+import endfield_panel
+import embedding_panel
+import disaster_config as disaster_config_mod
+import disaster_render as disaster_render_mod
+import render_settings
+import disaster_store as disaster_store_mod
 import master_settings
 import parser_settings
+import status_collect as status_live
+import status_config as status_config_mod
+import status_store as status_store_mod
+import superuser_settings
 from bot_monitor import Monitor, Restart, RestartController, WindowsRestart  # noqa: F401 - 测试仍按旧名引用
 
 ROOT = Path(__file__).resolve().parent
@@ -192,7 +204,7 @@ def state(req: Request):
     with topics._connect(topics.DEFAULT_PATH) as c:
         groups = [dict(r) for r in c.execute('SELECT group_id,enabled FROM topic_groups ORDER BY group_id')]
     cfg = weather.config()
-    return {'users':users,'groups':groups,'weather':{'host':cfg.get('host',''),'configured':bool(cfg.get('key'))},'pushes':weather.list_pushes()}
+    return {'users':users,'groups':groups,'weather':{'host':cfg.get('host',''),'configured':bool(cfg.get('key'))},'pushes':weather.list_pushes(),'epic':epic_config.read()}
 
 @app.get('/api/bot-status')
 async def bot_status(req: Request):
@@ -324,3 +336,244 @@ async def push(req: Request):
         else: weather.add_push(weather.PATH,str(b.get('kind','')),str(b.get('target','')),str(b.get('city','')),str(b.get('clock','')))
     except (ValueError,KeyError): raise HTTPException(400,'推送配置无效')
     return {'ok':True}
+
+
+@app.post('/api/epic')
+async def set_epic(req: Request):
+    mutate(req); body = await req.json()
+    try:
+        action = str(body.get('action', ''))
+        if action == 'add':
+            epic_config.add_target(body.get('kind', ''), body.get('id', ''))
+        elif action == 'delete':
+            epic_config.remove_target(body.get('kind', ''), body.get('id', ''))
+        elif action == 'save':
+            patch = {key: body[key] for key in ('country', 'locale', 'poll_minutes', 'push_enabled', 'include_upcoming', 'card_enabled') if key in body}
+            epic_config.update(patch)
+        elif action == 'test':
+            epic_config.request_test()
+        else:
+            raise ValueError('未知操作')
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    return {'ok': True}
+
+
+# ---------------------------------------------------------------- 灾害预警
+# 配置只落 data/disaster_warning.json；机器人进程与面板进程共用这一份。
+# 令牌写进文件后不再回显，面板只拿到 token_configured / 到期日。
+
+def disaster_config_path():
+    return ROOT / 'data' / 'disaster_warning.json'
+
+
+def disaster_store_path():
+    return ROOT / 'data' / 'disaster_warning.sqlite3'
+
+
+@app.get('/api/disaster')
+def get_disaster(req: Request):
+    authorized(req)
+    try:
+        return disaster_config_mod.public_view(disaster_config_mod.load_config(disaster_config_path()))
+    except (OSError, ValueError):
+        raise HTTPException(503, '灾害预警配置无法读取')
+
+
+@app.post('/api/disaster')
+async def set_disaster(req: Request):
+    mutate(req)
+    body = await req.json()
+    path = disaster_config_path()
+    config = disaster_config_mod.load_config(path)
+    try:
+        updated = disaster_config_mod.apply_patch(config, body if isinstance(body, dict) else {})
+        disaster_config_mod.save_config(updated, path)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except OSError:
+        raise HTTPException(503, '灾害预警配置无法保存')
+    return {'ok': True, 'config': disaster_config_mod.public_view(updated)}
+
+
+@app.get('/api/disaster/history')
+def get_disaster_history(req: Request, limit: int = 20, days: int = 7):
+    authorized(req)
+    store = disaster_store_mod.EventStore(disaster_store_path())
+    try:
+        return {
+            'stats': store.stats(days=max(1, min(days, 90))),
+            'events': store.recent(limit=max(1, min(limit, 50))),
+        }
+    finally:
+        store.close()
+
+
+@app.get('/api/disaster/render-status')
+async def disaster_render_status(req: Request):
+    authorized(req)
+    config = disaster_config_mod.load_config(disaster_config_path())
+    render = config.get('render') or {}
+    if not render.get('enabled'):
+        return {'configured': False, 'ok': False, 'message': '远程渲染已关闭'}
+    url = render_settings.load()['url']
+    try:
+        status = await disaster_render_mod.health(url, timeout=3)
+    except Exception as exc:
+        return {'configured': True, 'ok': False, 'message': str(exc)}
+    ready = status.get('ready') is True
+    return {
+        'configured': True,
+        'ok': bool(status.get('ok', True)) and ready,
+        'ready': ready,
+        'status': status,
+    }
+
+@app.get('/api/renderer')
+async def renderer_settings(req: Request):
+    authorized(req)
+    config = render_settings.load()
+    try:
+        status = await disaster_render_mod.health(config['url'], timeout=3)
+    except Exception:
+        status = {'ok': False, 'ready': False, 'error': '渲染服务未就绪'}
+    return {**config, 'status': status}
+
+
+@app.post('/api/renderer')
+async def save_renderer_settings(req: Request):
+    mutate(req)
+    body = await req.json()
+    try:
+        return render_settings.save(body.get('url', ''))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(400, str(exc))
+
+
+# ---------------------------------------------------------------- 服务器状态
+# 面板与机器人是两个进程，只共享文件：状态 JSON 里有 QQ 侧快照，SQLite 里有
+# 资源采样。这里只读，不做任何采集调度——那属于机器人进程。
+
+_status_cache = {}
+
+
+def status_paths():
+    base = ROOT / 'data'
+    return base / 'statuscard.json', base / 'statuscard-state.json', base / 'statuscard.sqlite3'
+
+
+def status_stores():
+    if 'samples' not in _status_cache:
+        _, state_path, db_path = status_paths()
+        _status_cache['state'] = status_store_mod.StateStore(state_path)
+        _status_cache['samples'] = status_store_mod.SampleStore(db_path)
+    return _status_cache['samples'], _status_cache['state']
+
+
+def downsample(points, limit=240):
+    """点数太多就等间隔抽稀；抽稀后仍保留首尾两个点。"""
+    if len(points) <= limit:
+        return points
+    step = len(points) / limit
+    picked = [points[int(index * step)] for index in range(limit)]
+    if picked[-1] is not points[-1]:
+        picked[-1] = points[-1]
+    return picked
+
+
+@app.get('/api/status/overview')
+def status_overview(req: Request, days: int = 1):
+    authorized(req)
+    try:
+        days = max(1, min(30, int(days)))
+    except (TypeError, ValueError):
+        days = 1
+    samples, state = status_stores()
+    now = time.time()
+    since = int(now - days * 86400)
+    try:
+        live = status_live.panel_snapshot()
+    except Exception:
+        live = {}
+    points = [
+        {'t': row['ts'], 'c': row['cpu'], 'm': row['mem']}
+        for row in samples.list_resources(since)
+        if row.get('cpu') is not None
+    ]
+    events = list(reversed(samples.list_events(since, limit=400)))[:20]
+    panel = state.section('panel')
+    report = samples.latest_report_run()
+    return {
+        'now': now,
+        'range_days': days,
+        'live': live,
+        'host': str(state.get('host') or ''),
+        'bot': panel,
+        'counters': state.section('counters'),
+        'network': {
+            'month_up': state.section('net').get('month_up'),
+            'month_down': state.section('net').get('month_down'),
+            'interface': state.section('net').get('interface'),
+            'last_sample': state.section('net').get('last_sample'),
+        },
+        'history': {'days': days, 'points': downsample(points)},
+        'events': events,
+        'report': report,
+        'stores': {key: value for key, value in samples.stats().items() if key != 'counts'},
+        'counts': samples.stats().get('counts', {}),
+        'config': status_config_mod.public_view(status_config_mod.load_config(status_paths()[0])),
+    }
+
+
+@app.post('/api/status/config')
+async def set_status_config(req: Request):
+    mutate(req)
+    body = await req.json()
+    path = status_paths()[0]
+    config = status_config_mod.load_config(path)
+    updated = status_config_mod.apply_patch(config, body if isinstance(body, dict) else {})
+    status_config_mod.save_config(updated, path)
+    return {'ok': True, 'config': status_config_mod.public_view(updated)}
+
+
+# ---------------------------------------------------------------- 超级管理员
+# 名单落在 data/superusers.json，机器人进程启动时加载、之后每 30 秒按 mtime
+# 热应用。面板与机器人是两个进程，只有这个文件是它们之间的唯一契约。
+
+@app.get('/api/superusers')
+def get_superusers(req: Request):
+    authorized(req)
+    env_users = superuser_settings.read_env_superusers(ROOT / '.env')
+    users, source = superuser_settings.resolve(env_users)
+    return {
+        'users': users,
+        'source': source,
+        'env_users': env_users,
+        'max': superuser_settings.MAX_USERS,
+    }
+
+
+@app.post('/api/superusers')
+async def set_superusers(req: Request):
+    mutate(req)
+    body = await req.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, '请求格式无效')
+    if body.get('reset'):
+        superuser_settings.reset()
+        env_users = superuser_settings.read_env_superusers(ROOT / '.env')
+        users, source = superuser_settings.resolve(env_users)
+        return {'ok': True, 'users': users, 'source': source, 'reset': True}
+    try:
+        saved = superuser_settings.save(body.get('users'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(503, '管理员名单保存失败') from exc
+    return {'ok': True, 'users': saved, 'source': 'file'}
+
+
+app.include_router(game_event_panel.router(authorized, mutate))
+
+endfield_panel.register(app, authorized=authorized, mutate=mutate, root=ROOT)
+embedding_panel.register(app, authorized=authorized, mutate=mutate, root=ROOT)

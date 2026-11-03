@@ -27,6 +27,10 @@
 | 在钩子里 `return` / 抛异常都拦不住回话 | MuiceBot 的钩子**没有取消语义**，流式回复边生成边发 | 拦要拦在匹配器的 `rule` 上：`driver.on_startup` 时 `matcher.rule = matcher.rule & gate_rule` |
 | 明明 @ 了却判定「没 @」 | 原生 `to_me()` 只认句首/句尾的 at 段，而且**引用回复也算 to_me** | 自己解析 `event.original_message` 里的 at 段 |
 | 闸门每 30 秒刷 `ValueError: Event has no context!` | `on_alconna` 建的匹配器 `type` 是空串，不限事件类型，心跳等元事件也会跑规则 | 规则第一行挡：`if event.get_type() != "message": return True` |
+| 调 OneBot 接口全部失败，报 `Bot.call_api() takes 2 positional arguments but 3 were given` | 写成了 `bot.call_action(...)`。NoneBot 的 `Bot.__getattr__` 会把**任意未知属性**当成 API 名，于是变成 `call_api("call_action", ...)`，参数数量对不上 | 一律写 `bot.call_api("<接口名>", **params)`；`tests/test_status_integration.py` 有专门用例钉住这个陷阱 |
+| `python -m pytest tests` 一次跑整份用例，报 `Plugin already exists: muicebot` | 每个 wiring 用例都要 `nonebot.init()` + `load_plugin`，而插件管理器是**进程级全局**的 | 统一走 `tests/_bootstrap.py` 的幂等 `ensure_nonebot()`；单文件直接跑、discover、pytest 三种方式都成立 |
+| 面板里改了超级管理员，机器人没反应 | 面板与机器人是两个进程，只共享 `data/superusers.json`；机器人最多 30 秒才轮询到 | 等 30 秒；或用 `状态卡诊断` 看「超级管理员：N 人（…）」确认来源。要立刻生效就重启机器人 |
+| 从 `.env` 删了超管，人还是管理员 | 名单文件存在时以文件为准，`.env` 只在文件不存在时作为初始值 | 在面板里删，或点「回退到 .env」后重启 |
 | **突然一条群消息都不回**，日志停在「正在调用模型...」，不报错 | 拼提示词时要查发言人名片，而 OneBot v11 适配器这个 API 调用**默认没有超时**，协议端不答就整条挂死 | `plugins/name_guard.py` 给这一跳加超时（默认 3s，等不到用 QQ 号当署名） |
 | 改了 `muicebot/utils/utils.py` 里的函数，线上没反应 | MuiceBot 是 `from .utils.utils import get_username`，函数在 import 时被抄进了调用方模块 | 就地替换**调用点模块**里的那份引用 |
 | 日志里 `Failed to import "muicebot.builtin_plugins.moe_chat"` | 插件是在 MuiceBot 加载内置插件的半路上被拉起来的，这时 `import_module` 会把它的导入做一半 | 只处理 `sys.modules` 里已加载好的模块，没看到的留给 `on_startup` 补（幂等） |
@@ -35,6 +39,11 @@
 | 用 `.model load` 选好模型，改一次配置就回去了 | `_on_config_changed` 永远按 `default: true` 重建，选择只在内存 | 选择写自己的 `data/model_pref.json`，每回合开头对账纠回 |
 | 进程跑几分钟自己退了，日志一堆 `UnicodeEncodeError: 'gbk'` | stdout 默认 GBK，日志里的表情符号让打日志这一步自己炸，炸在消息链上就把消息带走了 | 拉起前设 `PYTHONIOENCODING=utf-8`（`PYTHONUTF8=1` 一起设更稳） |
 | 日志文件中文/表情丢行，但机器人照常回话 | loguru 的 sink 写失败会自己吞掉，只往 stderr 打一段 | 以 loguru **自己的文件 sink** 为准（UTF-8，一行不缺） |
+| 发了图，日志 `多模态消息: []` | 图在**被引用的那条**里，不在当前消息（`quote_fix` 把引用图渲染成 `[图片]` 文字）；或模型条目没开 `multimodal: true` | 直接发图并 @ 她；`models.yml` 当前条目加 `multimodal: true` |
+| 开了多模态后每轮都很慢、token 暴涨 | MuiceBot 把图片资源落了库，历史 20 轮内的旧图会在后续每轮重新 base64 | `plugins/image_guard.py` 在 `BEFORE_MODEL_COMPLETION` 剥历史媒体；确认插件已加载（日志有 `[image]`） |
+| 图存成 `.png` 但内容是 JPEG，模型报图格式不支持 | OneBot11 的 `uniseg.Image.name` 默认 `image.png`，MuiceBot 按**后缀**拼 `data:image/...` | `image_guard` 统一转 JPEG；不要手动改后缀 |
+| 只发图不打字，模型回一句「你想说什么」 | 正文为空，提示词只剩 `<发言人> ` | `image_guard` 补 `（对方发来一张图片，没有配文字）`；没补说明就检查 `IMAGE_VISION` |
+| **只发一张图 + @ 她，完全没反应**，日志里连 `收到消息文本` 都没有 | MuiceBot 的 `at_event` 命令是 `re.compile(".+")`，纯图片消息 `extract_plain_text()` 为空，handler 根本进不去 | `image_guard` 在 priority 1 补 `[图片]` 占位符；占位符必须插在图片**前面**，否则 Alconna 仍可能匹配不到 |
 
 ## 3. RAG / GPU
 
@@ -76,3 +85,45 @@
 | 普通参数错误使绑定失效 | 曾把所有携带 token 的 400 当成认证错误 | 只有消息明确指向 framework token 时按凭据错误处理；其余 400 属于协议错误 |
 | 401/40301/400 都被当同一种错 | 缺 key / token 失效 / 缺 framework_token 语义不同 | 分别映射 config/auth；token 失效标 invalid，不自动删绑定 |
 | 绑定文件泄露 token | `framework_token` 明文 | `data/endfield/bindings.json` 0600、不提交 git、备份加密 |
+## 7. 服务器状态卡
+
+| 现象 | 原因 | 修法 |
+|---|---|---|
+| 状态卡中文全是方框 | 系统没有中文字体，`DejaVuSans` 有「字体」但没有汉字 | 渲染器优先用 `media_parser` 自带字体，再按候选表找 CJK 字体；一个都找不到就抛错回退文字，而不是画一屏方框 |
+| 卡片上的「回复」数不准 | NoneBot 没有全局发送钩子 | 在 `on_bot_connect` 给该 bot 实例包一层 `call_api`，只数成功的 `send_*`；包不上就退回只显示收数 |
+| 测试里 `data/` 莫名多出 sqlite3 | 插件是 import 时实例化的，构造就建库 | `Runtime(lazy=True)` 不在构造期建库，`prepare()` 在启动钩子里建 |
+| Windows 上「查看状态」卡十几秒 | psutil 逐进程开句柄，596 个进程约 8–13 秒；Linux 上是 0.1 秒级 | 进程扫描带 30 秒缓存，采样循环负责刷新；卡片/面板命中缓存。生产跑 Linux 不受影响 |
+| 日报的「昨天」偏一天 | `datetime.timestamp()` 对 naive datetime 按**系统时区**解释 | 一律构造带时区的 datetime，再做换算 |
+| 状态卡里某进程 CPU 显示 743% | psutil 的 per-process `cpu_percent` 是单核口径，20 核机器会超过 100% | 卡片与报表展示整机口径（除以核数），字段名保留 `cpu_pct_total` |
+| sqlite 库文件删不掉 / 描述符只增不减 | `with sqlite3.connect(...)` 只提交、不关闭 | 统一用会 `close()` 的 session 上下文；`PRAGMA` 也在 try 里，抛错时同样关闭 |
+| 告警装好后一直不发第一条 | 冷却判定把 `last_sent=0`（从没发过）当成「刚发过」 | 只在 `last_sent > 0` 时套冷却窗口 |
+| 定时状态图永远不触发 | 「首次安装不补发」的守卫把正常整点也挡住了 | 无历史标记时只在整点那一分钟触发；有标记才允许补发 |
+| 后一个用例读到前一个用例的告警状态 | 默认配置 / 默认状态用 `dict(base)` 浅拷贝，改嵌套 dict 其实是改到了模块级默认值 | `status_config.merge` 与 `status_store._deep_merge` 都改成 `copy.deepcopy(base)`；两处都补了回归用例 |
+| 面板保存配置后，同进程其它组件行为跟着变 | 同上：共享默认值 | 同上。配置与状态一律「读出来就是一份独立的副本」 |
+
+### 许可
+
+`statuscard` 系移植自 **AGPL-3.0** 的上游插件。改这些文件时不要把它们当成 MIT 代码，
+也不要删除文件头的来源注释——再分发时需要保留署名与完整许可（见 `docs/third-party/`）。
+
+## 8. Epic 喜加一
+
+| 现象 | 原因 | 修法 |
+|---|---|---|
+| 接口 200 却判成「本周无免费」 | 非法地区/接口异常会返回 **HTTP 200 + `errors[]` + `searchStore: null`** | `parse_payload` 先看 `errors` 与 `searchStore`，抛可识别异常；本轮跳过、不推、不更新状态 |
+| 同一地区两次请求免费条数不同 | `promotionalOffers` 组内 offer 顺序会翻转（实测 6 次翻转 2 次） | 遍历每一组、每一条 offer；禁止 `[0]`；fixture 覆盖两种顺序 |
+| 链接变成 `/p/null` | 免费条目的 `productSlug` 实测为 `null` | 用 `offerMappings[0].pageSlug`，兜底 `catalogNs.mappings[0].pageSlug` |
+| 服务端校验领取链接失败 | `store.epicgames.com` 对本机全站 403（含首页） | 只把 URL 当文本渲染，不做 HEAD 校验 |
+| 免费条目显示「现价 0」 | `fmtPrice.discountPrice` 免费时是字符串 `"0"` | 不直接展示现价；用「原价 → 免费」 |
+| 截止时间差一小时 | 换档点 UTC 15:00 或 16:00 随北美夏令时漂移 | 存带时区 UTC、展示固定 +8 并标「北京时间」，不写死小时 |
+| 装好后立刻刷一条 / 重启补发 | 没有历史基线 | 首装只记录不发送；状态键含 0% offer `startDate`，同一期不重推 |
+| 同一游戏隔周再免费却不再推 | 去重键只放 `id` | 键 = `id` + 该条 0% offer `startDate`；纯下架不推、换期算新一期 |
+| 临时下架又回来被重推 | 用「当前集合」直接覆盖历史 | 纯下架不更新状态；只记录上一次完整集合 |
+| 卡片偶发方框 | 内置字体缺 `▸` / `✓` 等字形 | 版式只用已验证字符；缺字/渲染失败回退文本并打一条 warning |
+| 面板点「立即推送」没反应 | 触发文件只由机器人进程消费，机器人离线时不会代发 | 先确认 `qqbot` active；机器人最多 30 秒内消费 |
+| 面板改完目标下一轮才生效 | 机器人每轮重读配置，不热推 | 保存后等下一轮或点「立即推送」 |
+| 测试跑完 `nonebot/data/` 多出文件 | 测试直接用了默认路径 | 所有路径可注入，测试用临时目录；`StateStore` / `epic_free_config` 均支持传 path |
+
+### 许可
+
+`epic_free_*`、`plugins/epic_free.py` 及其测试按 **AGPL-3.0** 分发（上游 README 声明 AGPL-3.0，但仓库未附 LICENSE）。改这些文件时不要当成 MIT 代码，也不要删除文件头的来源注释；再分发需保留 `docs/third-party/epicfree-{ATTRIBUTION,NOTICE,LICENSE}`。

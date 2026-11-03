@@ -10,7 +10,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from endfield.render import MAX_HTML_BYTES, RenderClient, RenderError  # noqa: E402
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16
+from io import BytesIO
+from PIL import Image
+_buffer = BytesIO()
+Image.new('RGB', (900, 1200), 'white').save(_buffer, 'PNG')
+PNG = _buffer.getvalue()
 
 
 class RenderClientTest(unittest.IsolatedAsyncioTestCase):

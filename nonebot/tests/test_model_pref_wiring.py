@@ -44,7 +44,7 @@ from nonebot.adapters.onebot.v11 import (  # noqa: E402
 )
 from muicebot.muice import Muice  # noqa: E402
 
-MASTER = "1690711850"
+MASTER = "10000001"
 OTHER = "3865067623"
 GROUP = 741096253
 SELF = 3892894069

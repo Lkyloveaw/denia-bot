@@ -1,8 +1,10 @@
 import asyncio
+from time import perf_counter
 from itertools import chain
 from pathlib import Path
 
 from nonebot import logger
+from nonebot.adapters.onebot.v11.exception import NetworkError
 from ..transport import (
     BaseMessageComponent,
     File,
@@ -152,8 +154,18 @@ class MessageSender:
         if not plan["preview_card"]:
             return
 
-        if image_path := await self.renderer.render_card(result):
-            await event.send(event.chain_result([self._image_from_path(image_path)]))
+        started = perf_counter()
+        if image_paths := await self.renderer.render_cards(result):
+            rendered = perf_counter()
+            await event.send(event.chain_result([self._image_from_path(path) for path in image_paths]))
+            logger.info(
+                f"[parser] {result.platform.name} 卡片生成 {rendered - started:.2f}s，"
+                f"发送确认 {perf_counter() - rendered:.2f}s"
+            )
+        else:
+            fallback = '\n'.join(str(value) for value in (result.header, result.display_url) if value)
+            if fallback:
+                await event.send(event.chain_result([Plain(fallback)]))
 
     async def _build_segments(
         self,
@@ -242,18 +254,14 @@ class MessageSender:
         segs: list[BaseMessageComponent],
         force_merge: bool,
     ) -> list[BaseMessageComponent]:
-        """
-        是否把消息段打包成合并转发。
+        """达到阈值时按原顺序打包转发，每个节点使用机器人自身身份。"""
+        if not force_merge or not segs:
+            return segs
 
-        这里**不再**合并：实测 7 张原图 ≈ 20 MB，打包成一个
-        `send_group_forward_msg` 协议端要 45 秒才回，最后直接超时，
-        一条都发不出去（日志里是 `send_group_forward_msg timeout`）。
-        逐张发送的总耗时反而更短，也不会整批失败。
-
-        保留参数是为了不改调用方签名；真要恢复合并，把 `force_merge`
-        的判断加回来即可。
-        """
-        return segs
+        self_id = event.get_self_id()
+        return [Nodes([
+            Node(uin=self_id, name="解析器", content=[seg]) for seg in segs
+        ])]
 
     @staticmethod
     def _build_text_fallback(result: ParseResult) -> list[BaseMessageComponent]:
@@ -297,36 +305,16 @@ class MessageSender:
         try:
             await event.send(event.chain_result(segs))
             return True
+        except (NetworkError, asyncio.TimeoutError):
+            # 等待回执超时不会取消 SnowLuma 已接收的发送请求。
+            # 原请求仍可能送达；逐张补发会让同一批图片出现两遍。
+            logger.warning("解析结果未收到发送确认，送达状态未知，不自动补发")
+            raise
         except Exception as e:
             seg_meta = self._collect_seg_meta(segs)
             logger.error(f"发送解析结果失败： error={e}, segments={seg_meta}")
-            # 整条发不出去时，图片单独再试一次：一次发一堆大图容易被协议端拒，
-            # 逐张发成功率高得多，也好过整批丢掉
-            recovered = await self._resend_images_one_by_one(event, segs)
-            return recovered
-
-    async def _resend_images_one_by_one(
-        self, event: AstrMessageEvent, segs: list[BaseMessageComponent]
-    ) -> bool:
-        """整条发送失败后的补救：把图片段一张一张发出去。
-
-        逐张发虽然会拆成多条消息，但至少图片能到群里；一次性发一堆大图
-        被协议端拒掉时，用户看到的就是「什么都没收到」。
-        """
-        images = [seg for seg in segs if isinstance(seg, Image)]
-        if not images:
-            return False
-
-        sent = 0
-        for seg in images:
-            try:
-                await event.send(event.chain_result([seg]))
-                sent += 1
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"单张补发失败：{type(exc).__name__}: {exc}")
-        if sent:
-            logger.info(f"整条发送失败，已逐张补发 {sent}/{len(images)} 张图片")
-        return sent > 0
+            # Transport 可能已经发送了部分消息，不能重放整个分组。
+            raise
 
     @staticmethod
     def _collect_seg_meta(segs: list[BaseMessageComponent]) -> list[dict[str, str]]:

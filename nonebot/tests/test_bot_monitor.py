@@ -158,11 +158,11 @@ class MonitorTests(unittest.TestCase):
                 password = Path(tmp)/'password'
                 password.write_text('test', encoding='utf-8')
                 monitor = Monitor(password_file=password, transport=httpx.MockTransport(handler))
-                with patch('bot_monitor.snowluma_candidates', return_value=['http://127.0.0.1:5099', 'http://10.0.0.226:5099']):
+                with patch('bot_monitor.snowluma_candidates', return_value=['http://127.0.0.1:5099', 'http://192.0.2.226:5099']):
                     result = await monitor.snowluma()
                 self.assertEqual(result['state'], 'online')
                 self.assertEqual(result['injected'], True)
-                self.assertEqual(monitor.snowluma_base, 'http://10.0.0.226:5099')
+                self.assertEqual(monitor.snowluma_base, 'http://192.0.2.226:5099')
         asyncio.run(run())
 
     def test_snowluma_reports_offline_only_when_every_candidate_fails(self):
@@ -173,7 +173,7 @@ class MonitorTests(unittest.TestCase):
                 password = Path(tmp)/'password'
                 password.write_text('test', encoding='utf-8')
                 monitor = Monitor(password_file=password, transport=httpx.MockTransport(handler))
-                with patch('bot_monitor.snowluma_candidates', return_value=['http://127.0.0.1:5099', 'http://10.0.0.226:5099']):
+                with patch('bot_monitor.snowluma_candidates', return_value=['http://127.0.0.1:5099', 'http://192.0.2.226:5099']):
                     result = await monitor.snowluma()
                 self.assertEqual(result['state'], 'offline')
                 self.assertIsNone(monitor.snowluma_base)
@@ -199,10 +199,10 @@ class MonitorTests(unittest.TestCase):
                 password = Path(tmp)/'password'
                 password.write_text('test', encoding='utf-8')
                 monitor = Monitor(password_file=password, transport=httpx.MockTransport(handler))
-                with patch('bot_monitor.snowluma_candidates', return_value=['http://host.docker.internal:5099', 'http://10.0.0.226:5099']):
+                with patch('bot_monitor.snowluma_candidates', return_value=['http://host.docker.internal:5099', 'http://192.0.2.226:5099']):
                     result = await monitor.snowluma()
                 self.assertEqual(result['state'], 'online')
-                self.assertEqual(monitor.snowluma_base, 'http://10.0.0.226:5099')
+                self.assertEqual(monitor.snowluma_base, 'http://192.0.2.226:5099')
         asyncio.run(run())
 
     def test_missing_password_reports_running_but_unverifiable(self):
@@ -211,7 +211,7 @@ class MonitorTests(unittest.TestCase):
             def handler(request):
                 return httpx.Response(200, text='webui')
             monitor = Monitor(password_file=Path('/nonexistent/password'), transport=httpx.MockTransport(handler))
-            with patch('bot_monitor.snowluma_candidates', return_value=['http://10.0.0.226:5099']):
+            with patch('bot_monitor.snowluma_candidates', return_value=['http://192.0.2.226:5099']):
                 result = await monitor.snowluma()
             self.assertEqual(result['state'], 'online')
             self.assertIsNone(result['injected'])

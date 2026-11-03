@@ -44,7 +44,7 @@ class WiringTest(unittest.TestCase):
                 self.assertIn('未开启', asyncio.run(plugin.topic_reply('101')))
                 plugin.topics.set_enabled(plugin.topics.DEFAULT_PATH, '101', True)
                 plugin.topics.record(plugin.topics.DEFAULT_PATH, '101', '1', '今汐', tokenizer=lambda _: ['今汐'])
-                fake_renderer = SimpleNamespace(render=lambda *a: b'png')
+                fake_renderer = SimpleNamespace(render_pages=lambda *a: [b'png'])
                 with patch.dict(sys.modules, {'weather_image': fake_renderer}):
                     result = asyncio.run(plugin.topic_reply('101'))
                 self.assertEqual(result.type, 'image')

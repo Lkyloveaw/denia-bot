@@ -24,10 +24,13 @@ NoneBot2 / MuiceBot 插件。协议终端：`https://end-api.shallow.ink`。
 规则：群聊必须 @ 机器人；@ 只作触发，查询主体永远是发送者；绑定/同步/个人订阅仅私聊；
 5 秒防抖；查询 100/天/QQ、绑定 3/天、切换 10/天、删除 20/天、同步 1/天；主人豁免。
 
+若网关创建绑定接口返回“请提供 framework_token”，插件会用便签接口验证授权；验证成功后保存本地绑定，并在回复中说明未新建网关绑定。此时普通查询使用本地凭据；删除该绑定只清理本地记录，不会撤销第三方授权。其他功能仍取决于各网关接口是否可用。
+
 ## 配置与 Key
 
 - 非敏感配置：`nonebot/data/endfield.json`；面板可写，bot 按 mtime 热加载。
 - API Key：`nonebot/data/endfield_secrets.json`（0600）；面板写，`ENDFIELD_API_KEY` 兜底。
+- 网关 DNS 默认使用系统解析；虚拟地址解析导致连接失败时，可为机器人设置 `ENDFIELD_API_DNS=alidns`，仅对默认终末地网关使用阿里公共 DNS，并保留原域名的 TLS 证书校验。
 - 绑定/订阅/心跳/审计：`nonebot/data/endfield/`（0600；bot 独占写，面板只读）。
 - 面板：主控制台侧栏「终末地」；`/endfield` 跳转到 `/#endfield`。可编辑开关、提醒间隔、静默时段、渲染地址；绑定与订阅只读。
 - 密钥优先级：面板 > 环境变量。测试新密钥不会保存；删除面板密钥后回退环境变量。
@@ -40,7 +43,7 @@ NoneBot2 / MuiceBot 插件。协议终端：`https://end-api.shallow.ink`。
 
 - 机器人发 HTML → `POST {render_url}/render` → PNG；失败回退文本。
 - 默认 `render_url=http://127.0.0.1:3100`（开发服宿主机服务；容器环境请按实际地址配置）。
-- 开发服务器 `10.0.0.226` 的 **3000 是 personal-wiki**；宿主机模式 renderer 用
+- 开发服务器 `192.0.2.226` 的 **3000 是 personal-wiki**；宿主机模式 renderer 用
   `HOST=127.0.0.1 PORT=3100`，bot 配 `render_url=http://127.0.0.1:3100`。
 - 3100 仅回环，外网/CI 不能直连；live 测试在服务器本机跑，或
   `ssh -L 3100:127.0.0.1:3100`。

@@ -558,7 +558,7 @@ cd nonebot && pytest -q -m "not live"
 cd nonebot && ENDFIELD_LIVE_TESTS=1 \
   ENDFIELD_LIVE_RENDER_URL=http://127.0.0.1:3100 \
   ENDFIELD_LIVE_DASHBOARD_URL=http://127.0.0.1:8080 \
-  pytest -q -m live     # 在 10.0.0.226 本机跑；renderer 仅回环
+  pytest -q -m live     # 在 192.0.2.226 本机跑；renderer 仅回环
 ```
 
 - 请求 5–10 s 超时；CI job 10 min；`--maxfail=1`；不新增测试依赖。
@@ -578,17 +578,17 @@ cd nonebot && ENDFIELD_LIVE_TESTS=1 \
 
 ### 13.1 开发服务器
 
-- `10.0.0.226`：**22 SSH**；**3000 personal-wiki（登录页，非渲染器）**；**3100 renderer（宿主机模式，仅 127.0.0.1）**；**8080 uvicorn（dashboard/服务入口，路径待确认）**；80 关闭；bot/dashboard/renderer 同机。
+- `192.0.2.226`：**22 SSH**；**3000 personal-wiki（登录页，非渲染器）**；**3100 renderer（宿主机模式，仅 127.0.0.1）**；**8080 uvicorn（dashboard/服务入口，路径待确认）**；80 关闭；bot/dashboard/renderer 同机。
 - bot 在 dev server：`render_url=http://127.0.0.1:3100`。
 - 外网/CI：**3100 不可直连**（只绑回环）；live render 在服务器上跑，或 `ssh -L 3100:127.0.0.1:3100` 建隧道。
-- `3000` 是 personal-wiki，不是渲染器；不要把 endfield 的 render_url 指到 `10.0.0.226:3000`。
+- `3000` 是 personal-wiki，不是渲染器；不要把 endfield 的 render_url 指到 `192.0.2.226:3000`。
 - 只绑回环/私网；不暴露公网；不加 render token（当前客户端不发送；跨机时再加）。
 
 ### 13.2 启动顺序
 
 1. 宿主机模式（dev server）：`HOST=127.0.0.1 PORT=3100 ... node server.js`；`curl http://127.0.0.1:3100/health` → ready。Docker compose 默认绑 `127.0.0.1:3000`，但 dev server 的 3000 是 personal-wiki，不要占用；独立机器才用 3000。
 2. bot（现有服务/进程）加载 `nonebot/plugins/endfield.py`；`data/endfield.json` 生效，`render_url` 指向 `http://127.0.0.1:3100`。
-3. dashboard（现有 uvicorn）打开 `http://10.0.0.226:8080`；终末地页（路径以现有面板为准）。
+3. dashboard（现有 uvicorn）打开 `http://192.0.2.226:8080`；终末地页（路径以现有面板为准）。
 4. 面板填 API Key / 测试连接；首次绑定私聊；`终末地诊断`。
 
 ### 13.3 配置/文件
@@ -638,7 +638,7 @@ cd nonebot && ENDFIELD_LIVE_TESTS=1 \
 
 ### M6 测试/实测/收尾
 
-- 离线全量 E2E；live smoke 在 `10.0.0.226` 本机跑（renderer 仅回环，端口 3100）；手工 HITL 绑定/查询/签到/解绑；视觉逐模板验收。
+- 离线全量 E2E；live smoke 在 `192.0.2.226` 本机跑（renderer 仅回环，端口 3100）；手工 HITL 绑定/查询/签到/解绑；视觉逐模板验收。
 - 验收：`pytest -q` 全绿；live gate 通过；无秘密泄露；文档完整。
 
 ---
@@ -701,7 +701,7 @@ cd nonebot && ENDFIELD_LIVE_TESTS=1 \
 | #16 | 四类订阅；10/20/20/00:05；静默；asyncio tick；opt-in 签到 | — |
 | #17 | 16 模板；自包含 HTML；Noto CJK；PNG；回退 | — |
 | #18 | 终末地页；配置/Key 写、数据只读；status/心跳/audit | — |
-| #19 | 全量 E2E 离线；live gate；10.0.0.226；must-pass | — |
+| #19 | 全量 E2E 离线；live gate；192.0.2.226；must-pass | — |
 | #34 | 官方 NoneBot 许可冲突/缺资源/功能一半 → 只参考 | `endfield-nonebot-upstream.md` |
 | #35 | AstrBot 基线 + 远程渲染 | — |
 | #38 | Key 面板化；secrets 0600；masked；mtime | — |

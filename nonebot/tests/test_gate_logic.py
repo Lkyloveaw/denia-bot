@@ -287,7 +287,7 @@ def t_auto_at_must_belong_to_the_quoted_author_when_known():
 def t_replying_to_your_own_message_carries_no_auto_at():
     """2026-09-27 17:46 那条真实事件：主人回复自己发的消息，整条一个 at 段都没有。"""
     segs = [("reply", "-1886103778"), ("text", "好叭 你好好休息")]
-    assert auto_at_index(segs, reply_author="1690711850") is None
+    assert auto_at_index(segs, reply_author="10000001") is None
 
 
 def t_mentions_self_can_ignore_the_auto_at():

@@ -32,7 +32,8 @@ import sys
 from pathlib import Path
 
 import nonebot
-from nonebot import get_driver, logger
+from nonebot import get_driver, logger, on_message
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent, MessageSegment
 from muicebot.plugin import PluginMetadata
 
 try:
@@ -51,6 +52,39 @@ __plugin_meta__ = PluginMetadata(
 
 driver = get_driver()
 FALLBACK_NICK = "达妮娅"
+QUOTE_CHAT_HINT = "（用户引用了一条消息，希望你回应。）"
+
+
+def is_quoted_at_bot(event: GroupMessageEvent) -> bool:
+    """Recognize an explicit bot mention after a quote in the original message."""
+    parts = list(event.original_message)
+    for index, part in enumerate(parts):
+        if part.type == 'reply':
+            return any(segment.type == 'at' and str(segment.data.get('qq')) == str(event.self_id)
+                       for segment in parts[index + 1:])
+    return False
+
+
+def needs_quote_preparation(event: MessageEvent) -> bool:
+    if isinstance(event, GroupMessageEvent) and is_quoted_at_bot(event):
+        return True
+    reply = event.reply
+    return bool(event.is_tome() and reply and any(part.type == "image" for part in reply.message))
+
+
+quote_chat_trigger = on_message(rule=needs_quote_preparation, priority=0, block=False)
+
+
+@quote_chat_trigger.handle()
+async def prepare_quoted_chat(event: MessageEvent) -> None:
+    if not needs_quote_preparation(event):
+        return
+    if isinstance(event, GroupMessageEvent) and is_quoted_at_bot(event):
+        event.to_me = True
+        if not event.message.extract_plain_text().strip() or event.message[0].type != 'text':
+            event.message.insert(0, MessageSegment.text(QUOTE_CHAT_HINT))
+    if event.reply:
+        event.message.extend(part.copy() for part in event.reply.message if part.type == "image")
 
 
 def _flag(name: str = "quote_fix", default: bool = True) -> bool:

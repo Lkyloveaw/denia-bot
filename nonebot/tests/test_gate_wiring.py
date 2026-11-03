@@ -45,7 +45,7 @@ from muicebot.models import Message as ChatMessage  # noqa: E402
 from muicebot.onebot import at_event, nickname_event  # noqa: E402
 
 SELF = "3892894069"
-MASTER = "1690711850"
+MASTER = "10000001"
 GROUP = 741096253
 FAILED: list[str] = []
 

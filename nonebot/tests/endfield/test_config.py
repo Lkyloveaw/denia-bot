@@ -32,7 +32,7 @@ class EndfieldConfigTest(unittest.TestCase):
             signin_time="08:30",
             quiet_start="00:00",
             quiet_end="07:00",
-            render_url="http://10.0.0.226:3000",
+            render_url="http://192.0.2.226:3000",
             render_timeout_seconds=40,
             log_level="WARNING",
         )
@@ -43,7 +43,7 @@ class EndfieldConfigTest(unittest.TestCase):
         self.assertEqual(saved.signin_time, "08:30")
         self.assertEqual(saved.quiet_start, "00:00")
         self.assertEqual(saved.quiet_end, "07:00")
-        self.assertEqual(saved.render_url, "http://10.0.0.226:3000")
+        self.assertEqual(saved.render_url, "http://192.0.2.226:3000")
         self.assertEqual(saved.render_timeout_seconds, 40)
         self.assertEqual(saved.log_level, "WARNING")
 
@@ -86,9 +86,9 @@ class EndfieldConfigTest(unittest.TestCase):
 
     def test_render_url_allows_private_and_rejects_public(self):
         allowed = cfg.EndfieldConfig.from_mapping(
-            {"render_url": "http://10.0.0.226:3000"}
+            {"render_url": "http://192.0.2.226:3000"}
         )
-        self.assertEqual(allowed.render_url, "http://10.0.0.226:3000")
+        self.assertEqual(allowed.render_url, "http://192.0.2.226:3000")
 
         localhost = cfg.EndfieldConfig.from_mapping(
             {"render_url": "http://127.0.0.1:3000/render"}

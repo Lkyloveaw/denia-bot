@@ -152,7 +152,7 @@ def test_invalid_binding_notifies_once_with_delivery_retry(tmp_path, kind, metho
         await fresh().tick(now + timedelta(minutes=40))
         assert query.await_count == 1
         assert len(sink.private_messages) == 1
-        assert '授权登陆' in sink.private_messages[0][1]
+        assert '.授权登陆' in sink.private_messages[0][1]
         assert (await fresh().bindings.list_bindings('100'))[0]['status'] == 'invalid'
     asyncio.run(scenario())
 
