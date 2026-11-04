@@ -8,7 +8,7 @@ WorkingDirectory=/opt/qqbot/nonebot
 # 默认只绑回环；部署机用 drop-in 覆盖真实监听地址，仓库不保存内网 IP：
 #   /etc/systemd/system/qqbot-dashboard.service.d/host.conf
 #   [Service]
-#   Environment=DASHBOARD_HOST=10.0.0.226
+#   Environment=DASHBOARD_HOST=<部署机内网地址>
 Environment=DASHBOARD_HOST=127.0.0.1
 ExecStart=/opt/qqbot/.venv/bin/uvicorn dashboard:app --host ${DASHBOARD_HOST} --port 8092 --no-access-log
 Restart=on-failure
