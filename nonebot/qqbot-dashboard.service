@@ -5,7 +5,12 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/qqbot/nonebot
-ExecStart=/opt/qqbot/.venv/bin/uvicorn dashboard:app --host 192.0.2.226 --port 8092 --no-access-log
+# 默认只绑回环；部署机用 drop-in 覆盖真实监听地址，仓库不保存内网 IP：
+#   /etc/systemd/system/qqbot-dashboard.service.d/host.conf
+#   [Service]
+#   Environment=DASHBOARD_HOST=10.0.0.226
+Environment=DASHBOARD_HOST=127.0.0.1
+ExecStart=/opt/qqbot/.venv/bin/uvicorn dashboard:app --host ${DASHBOARD_HOST} --port 8092 --no-access-log
 Restart=on-failure
 UMask=0077
 

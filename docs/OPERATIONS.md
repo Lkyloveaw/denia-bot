@@ -323,6 +323,44 @@ journalctl -u qqbot -n 80 --no-pager | grep -i epic
 - 测试：`cd nonebot && .venv/Scripts/python.exe -m pytest tests/endfield -q`（默认离线）。
 - 公告订阅仅 superusers 在目标群；个人订阅仅私聊；图卡失败自动回退文本。
 
+## 11. 部署本地文件与同步排除
+
+以下文件只存在于部署机，仓库里只保留 `*.example` 模板。**从仓库同步代码时必须排除它们**，否则真实配置会被占位值覆盖：
+
+| 文件 | 仓库对应物 | 说明 |
+|---|---|---|
+| `nonebot/.env` | `nonebot/.env.example` | OneBot token、`SUPERUSERS` 等 |
+| `nonebot/configs/models.yml` | `nonebot/configs/models.yml.example` | 模型地址与密钥 |
+| `nonebot/configs/templates.yml` | `nonebot/configs/templates.yml.example` | 人格配置；`userinfos` 含主人 QQ |
+| `nonebot/data/` | — | 运行时状态与凭据 |
+| `/etc/systemd/system/qqbot-dashboard.service` 及 `.d/` | `nonebot/qqbot-dashboard.service` | 仓库 unit 默认绑 `127.0.0.1`，真实监听地址放 drop-in |
+| `snowluma/config/`、`compose.yml` | `docker/snowluma/` 模板 | 协议端配置 |
+
+同步建议：
+
+```bash
+rsync -a --exclude '.env' \
+  --exclude 'configs/models.yml' --exclude 'configs/templates.yml' \
+  --exclude 'data/' --exclude '.venv/' --exclude '__pycache__/' \
+  <仓库>/nonebot/ /opt/qqbot/nonebot/
+```
+
+若用 `git pull`，先在部署机执行一次：
+
+```bash
+git update-index --skip-worktree nonebot/configs/templates.yml
+```
+
+面板监听地址用 drop-in 覆盖（不要把真实内网地址写进仓库）：
+
+```ini
+# /etc/systemd/system/qqbot-dashboard.service.d/host.conf
+[Service]
+Environment=DASHBOARD_HOST=<部署机内网地址>
+```
+
+改完执行 `systemctl daemon-reload && systemctl restart qqbot-dashboard`，再用 `systemctl show -p ExecStart` 核对实际监听地址。
+
 ## 附录：Windows 单机部署（历史）
 
 早期在 `D:\Software\qqbot` 上用 SnowLuma + NoneBot 双进程跑的方案，入口是

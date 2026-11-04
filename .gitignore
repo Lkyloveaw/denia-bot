@@ -2,6 +2,8 @@
 # 只提交 *.example 模板；真实配置永远不进仓库
 nonebot/.env
 nonebot/configs/models.yml
+# 真实人格配置含主人 QQ 等私人信息；仓库只保留 templates.yml.example
+nonebot/configs/templates.yml
 tools/*token*.txt
 tools/*pass*.txt
 tools/*.pem
