@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent
 PATH = ROOT / 'data' / 'media_parser' / 'config.json'
 SCHEMA_PATH = ROOT / 'media_parser' / '_conf_schema.json'
 SECRET_FIELDS = {'cookies', 'snowluma_access_token', 'proxy'}
-READ_ONLY = {'arbiter', 'require_at_in_group'}
+READ_ONLY = {'require_at_in_group'}
 
 
 def schema():

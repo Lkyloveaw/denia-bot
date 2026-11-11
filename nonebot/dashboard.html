@@ -373,7 +373,7 @@ function parserSetAll(on){
 }
 function parserField(scope,key,spec,value,secrets){
   const label=document.createElement('label'),title=document.createElement('span');label.className='parser-field';title.textContent=spec.description||key;label.append(title);
-  const secret=key==='cookies'||key==='snowluma_access_token'||key==='proxy',secretKey=scope==='general'?key:`${scope}.${key}`,readonly=scope==='general'&&(key==='arbiter'||key==='require_at_in_group');let input,synced=null;
+  const secret=key==='cookies'||key==='snowluma_access_token'||key==='proxy',secretKey=scope==='general'?key:`${scope}.${key}`,readonly=scope==='general'&&key==='require_at_in_group';let input,synced=null;
   if(spec.type==='bool'){let row=document.createElement('span');row.className='parser-check';input=document.createElement('input');input.type='checkbox';input.checked=!!value;let state=document.createElement('span');state.textContent=input.checked?'开启':'关闭';const sync=()=>{state.textContent=input.checked?'开启':'关闭'};input.addEventListener('change',()=>{sync();parserRefresh()});synced=sync;row.append(input,state);label.append(row)}
   else if(spec.options&&spec.type!=='list'){input=document.createElement('select');spec.options.forEach((v,i)=>{let o=document.createElement('option');o.value=String(v);o.textContent=(spec.labels||[])[i]||String(v);input.append(o)});input.value=value??spec.default??'';label.append(input)}
   else if(spec.type==='list'){input=document.createElement('textarea');input.rows=3;input.value=Array.isArray(value)?value.join('\n'):'';input.placeholder='每行一项';label.append(input)}
