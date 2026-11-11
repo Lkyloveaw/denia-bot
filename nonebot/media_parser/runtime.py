@@ -85,7 +85,7 @@ class ParserRuntime:
         try:
             keyword, found = match
             session = session_key(event)
-            if getattr(event, 'group_id', None) is not None:
+            if getattr(event, 'group_id', None) is not None and self.cfg.arbiter:
                 ctx = ArbiterContext(int(event.message_id), int(event.time), int(event.self_id))
                 if not await self.arbiter.compete(ArbiterBot(bot), ctx):
                     status = "skipped"
