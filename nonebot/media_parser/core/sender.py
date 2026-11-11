@@ -37,6 +37,7 @@ from .exception import (
     ZeroSizeException,
 )
 from .render import Renderer
+from .perf import mark, phase
 from .utils import transcode_video_audio_to_lc
 
 
@@ -155,9 +156,15 @@ class MessageSender:
             return
 
         started = perf_counter()
-        if image_paths := await self.renderer.render_cards(result):
+        with phase("preview_render") as timing:
+            image_paths = await self.renderer.render_cards(result)
+            if not image_paths:
+                timing.status = "degraded"
+                mark("degraded")
+        if image_paths:
             rendered = perf_counter()
-            await event.send(event.chain_result([self._image_from_path(path) for path in image_paths]))
+            with phase("preview_send"):
+                await event.send(event.chain_result([self._image_from_path(path) for path in image_paths]))
             logger.info(
                 f"[parser] {result.platform.name} 卡片生成 {rendered - started:.2f}s，"
                 f"发送确认 {perf_counter() - rendered:.2f}s"
@@ -165,7 +172,8 @@ class MessageSender:
         else:
             fallback = '\n'.join(str(value) for value in (result.header, result.display_url) if value)
             if fallback:
-                await event.send(event.chain_result([Plain(fallback)]))
+                with phase("preview_fallback_send"):
+                    await event.send(event.chain_result([Plain(fallback)]))
 
     async def _build_segments(
         self,
@@ -210,6 +218,7 @@ class MessageSender:
             try:
                 path: Path = task.result()  # 已完成，异常在这里重新抛出
             except (SizeLimitException, DurationLimitException) as exc:
+                mark("degraded")
                 if self.cfg.show_download_fail_tip:
                     segs.append(Plain(
                         "此项媒体超过时长限制"
@@ -218,8 +227,10 @@ class MessageSender:
                     ))
                 continue
             except (DownloadLimitException, ZeroSizeException):
+                mark("degraded")
                 continue
             except DownloadException:
+                mark("degraded")
                 if self.cfg.show_download_fail_tip:
                     segs.append(Plain("此项媒体下载失败"))
                 continue
@@ -296,14 +307,16 @@ class MessageSender:
 
         await self._send_preview_card(event, result, plan)
 
-        segs = await self._build_segments(result, plan)
+        with phase("media_prepare"):
+            segs = await self._build_segments(result, plan)
         segs = self._merge_segments_if_needed(event, segs, plan["force_merge"])
 
         if not segs:
             return False
 
         try:
-            await event.send(event.chain_result(segs))
+            with phase("media_send"):
+                await event.send(event.chain_result(segs))
             return True
         except (NetworkError, asyncio.TimeoutError):
             # 等待回执超时不会取消 SnowLuma 已接收的发送请求。
@@ -360,8 +373,10 @@ class MessageSender:
                 return
 
             try:
-                await event.send(event.chain_result(segs))
+                with phase("text_fallback_send"):
+                    await event.send(event.chain_result(segs))
             except Exception as e:
+                mark("error")
                 seg_meta = self._collect_seg_meta(segs)
                 logger.error(f"发送解析结果失败： error={e}, segments={seg_meta}")
             return

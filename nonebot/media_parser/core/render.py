@@ -12,6 +12,7 @@ from nonebot import logger
 from card_document import document, text, paragraphs, image_uri, chunks
 from render_client import render_document_async
 from .data import ParseResult
+from .perf import mark, phase
 
 STYLE='''
 .sheet{padding:28px;background:#fbfaf7;color:#292a2c;font-size:23px}.panel{background:#fff;border-color:#e8e5df}
@@ -55,11 +56,12 @@ class Renderer:
             done,_=await asyncio.wait([avatar_task],timeout=self.AVATAR_WAIT_TIMEOUT)
             available=bool(done)
             if not available:
+                mark("degraded")
                 avatar_task.add_done_callback(lambda task: None if task.cancelled() else task.exception())
         path=None
         if available:
             try: path=await result.author.get_avatar_path()
-            except Exception: pass
+            except Exception: mark("degraded")
         uri=await asyncio.to_thread(image_uri,path,width=96,height=96)
         avatar=f'<img class="avatar" src="{uri}">' if uri else '<div class="avatar"></div>'
         return '<header class="parser-header">'+platform+'<div class="author">'+avatar+'<div class="author-info">' \
@@ -67,18 +69,26 @@ class Renderer:
 
     async def _blocks(self,result,depth=0):
         if depth>4: return ['<p class="more">更早的转发请查看原帖。</p>']
-        blocks=[await self._header(result)]
+        with phase("avatar_header"):
+            header=await self._header(result)
+        blocks=[header]
         if result.title:
             blocks.extend(paragraphs(result.title,chars=300,class_name='title text'))
         cover=None
-        try: cover=await result.cover_path
-        except Exception: pass
+        try:
+            with phase("cover_wait"):
+                cover=await result.cover_path
+        except Exception: mark("degraded")
         uri=await asyncio.to_thread(image_uri,cover,width=744,height=700)
         if uri:
             blocks.append(f'<div class="cover"><img src="{uri}"></div>')
         elif result.img_contents:
             items=result.img_contents[:self.MAX_IMAGES_DISPLAY]
-            paths=await asyncio.gather(*(item.get_preview_path() for item in items),return_exceptions=True)
+            with phase("image_preview_wait") as timing:
+                paths=await asyncio.gather(*(item.get_preview_path() for item in items),return_exceptions=True)
+                if any(path is None or isinstance(path,BaseException) for path in paths):
+                    timing.status="degraded"
+                    mark("degraded")
             uris=await asyncio.gather(*(asyncio.to_thread(image_uri,path,width=744 if len(items)==1 else 350,height=700 if len(items)==1 else 350)
                 for path in paths if path is not None and not isinstance(path,BaseException)))
             uris=[uri for uri in uris if uri]
@@ -93,8 +103,12 @@ class Renderer:
         elif result.graphics_contents:
             for item in result.graphics_contents:
                 blocks.extend(paragraphs(item.text,chars=550,class_name='text'))
-                try: path=await item.get_path()
-                except Exception: path=None
+                try:
+                    with phase("graphics_wait"):
+                        path=await item.get_path()
+                except Exception:
+                    mark("degraded")
+                    path=None
                 uri=await asyncio.to_thread(image_uri,path,width=744,height=700)
                 if uri: blocks.append(f'<div class="cover"><img src="{uri}"></div>')
                 if item.alt: blocks.extend(paragraphs(item.alt,chars=450,class_name='caption text'))
@@ -111,8 +125,10 @@ class Renderer:
 
     async def render_cards(self,result: ParseResult) -> list[Path]:
         try:
-            html=await self.build_html(result)
-            pages=await render_document_async(html,width=self.DEFAULT_CARD_WIDTH,source='parser')
+            with phase("html_assets"):
+                html=await self.build_html(result)
+            with phase("renderer"):
+                pages=await render_document_async(html,width=self.DEFAULT_CARD_WIDTH,source='parser')
             self.cfg.cache_dir.mkdir(parents=True,exist_ok=True)
             stem=f'card_{uuid.uuid4().hex}'
             paths=[]

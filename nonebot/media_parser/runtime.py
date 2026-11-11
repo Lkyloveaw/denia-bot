@@ -3,6 +3,7 @@
 import asyncio
 import os
 import re
+from time import perf_counter
 
 from nonebot import logger
 
@@ -14,6 +15,7 @@ from .core.debounce import Debouncer
 from .core.download import Downloader
 from .core.parsers import BaseParser, BilibiliParser
 from .core.render import Renderer
+from .core.perf import begin, end, outcome, phase, record
 from .core.sender import MessageSender
 from .core.utils import extract_json_url
 from .transport import Transport
@@ -76,18 +78,26 @@ class ParserRuntime:
 
     async def process(self, bot, event, match):
         keyword = found = None
+        started = perf_counter()
+        parser = self.parsers.get(match[0])
+        token = begin(getattr(getattr(parser, "platform", None), "name", "unknown"))
+        status = "ok"
         try:
             keyword, found = match
             session = session_key(event)
             if getattr(event, 'group_id', None) is not None:
                 ctx = ArbiterContext(int(event.message_id), int(event.time), int(event.self_id))
                 if not await self.arbiter.compete(ArbiterBot(bot), ctx):
+                    status = "skipped"
                     return
             if self.debouncer.hit_link(session, found.group(0)):
+                status = "skipped"
                 return
             try:
-                result = await self.parsers[keyword].parse(keyword, found)
+                with phase("parse"):
+                    result = await self.parsers[keyword].parse(keyword, found)
             except Exception as exc:
+                status = "error"
                 platform = self.parsers[keyword].platform.name
                 self.log_failure(exc, platform=platform, url=found.group(0))
                 logger.warning(f'[parser] {platform} 解析失败：{type(exc).__name__}')
@@ -98,11 +108,15 @@ class ParserRuntime:
                     logger.warning('[parser] 无法发送解析失败提示')
                 return
             if self.debouncer.hit_resource(session, result.get_resource_id()):
+                status = "skipped"
                 return
-            await self.sender.send_parse_result(Transport(bot, event, self.cfg), result)
+            with phase("send"):
+                await self.sender.send_parse_result(Transport(bot, event, self.cfg), result)
         except asyncio.CancelledError:
+            status = "cancelled"
             raise
         except Exception as exc:
+            status = "error"
             logger.exception('[parser] 解析或发送失败')
             platform = ''
             try:
@@ -110,6 +124,11 @@ class ParserRuntime:
             except (KeyError, AttributeError):
                 pass
             self.log_failure(exc, platform=platform, url=found.group(0) if found else '')
+        finally:
+            try:
+                record("total", started, outcome() if status == "ok" else status)
+            finally:
+                end(token)
 
     def log_failure(self, exc: Exception, *, platform: str = '', url: str = ''):
         """把失败写进事件日志；超出阈值单独归类，面板上能一眼看出来。"""

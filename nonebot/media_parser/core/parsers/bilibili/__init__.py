@@ -13,6 +13,7 @@ from nonebot import logger
 
 from ...config import PluginConfig
 from ...data import ImageContent, MediaContent, Platform, SendGroup
+from ...perf import phase
 from ...exception import DownloadException, DurationLimitException
 from ..base import (
     BaseParser,
@@ -205,7 +206,8 @@ class BilibiliParser(BaseParser):
 
         video = await self._get_video(bvid=bvid, avid=avid)
         # 转换为 msgspec struct
-        video_info = convert(await video.get_info(), VideoInfo)
+        with phase("bili_video_info"):
+            video_info = convert(await video.get_info(), VideoInfo)
         # 获取简介
         text = f"简介: {video_info.desc}" if video_info.desc else None
         # up
@@ -217,9 +219,10 @@ class BilibiliParser(BaseParser):
         ai_summary = ""
         if self.login._credential:
             try:
-                cid = await video.get_cid(page_info.index)
-                ai_conclusion = await video.get_ai_conclusion(cid)
-                ai_conclusion = convert(ai_conclusion, AIConclusion)
+                with phase("bili_ai_summary"):
+                    cid = await video.get_cid(page_info.index)
+                    ai_conclusion = await video.get_ai_conclusion(cid)
+                    ai_conclusion = convert(ai_conclusion, AIConclusion)
                 ai_summary = ai_conclusion.summary
             except Exception:
                 ai_summary = "哔哩哔哩 cookie 未配置或失效, 无法使用 AI 总结"
