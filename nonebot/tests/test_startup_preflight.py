@@ -31,6 +31,14 @@ def test_preflight_reports_and_forwards_index() -> None:
     assert 'proxy' in text.lower()
 
 
+def test_preflight_installs_media_parser_requirements() -> None:
+    text = PREFLIGHT.read_text(encoding='utf-8')
+    assert "$parserRequirements = Join-Path $botDir 'media_parser\\requirements.txt'" in text
+    assert "$pipArgs += @('-r', $parserRequirements)" in text
+    assert '$requirementsFiles += $parserRequirements' in text
+    assert 'media parser requirements' in text
+
+
 def test_launcher_forwards_index_url() -> None:
     text = LAUNCHER.read_text(encoding='utf-8-sig')
     assert '[string]$IndexUrl' in text

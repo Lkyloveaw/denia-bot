@@ -18,6 +18,7 @@ $botDir = Join-Path $rootPath 'nonebot'
 $venvDir = Join-Path $botDir '.venv'
 $python = Join-Path $venvDir 'Scripts\python.exe'
 $requirements = Join-Path $rootPath 'requirements.lock'
+$parserRequirements = Join-Path $botDir 'media_parser\requirements.txt'
 $ragIndex = Join-Path $rootPath 'rag\index-siliconflow'
 if ($env:KB_CLOUD_INDEX) {
     $ragIndex = $env:KB_CLOUD_INDEX
@@ -121,9 +122,12 @@ function Write-PipIndex {
 }
 
 function Invoke-PipInstall {
-    Write-Section 'Installing/repairing requirements.lock; no service starts until this completes ...'
+    Write-Section 'Installing/repairing requirements.lock and media parser requirements; no service starts until this completes ...'
     Write-PipIndex
     $pipArgs = @('-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '-r', $requirements)
+    if (Test-Path -LiteralPath $parserRequirements -PathType Leaf) {
+        $pipArgs += @('-r', $parserRequirements)
+    }
     if ($IndexUrl) {
         $pipArgs += @('--index-url', $IndexUrl)
     }
@@ -342,7 +346,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Ok 'pip is available'
 
-$requirementsHash = (Get-FileHash -LiteralPath $requirements -Algorithm SHA256).Hash.ToLowerInvariant()
+$requirementsFiles = @($requirements)
+if (Test-Path -LiteralPath $parserRequirements -PathType Leaf) {
+    $requirementsFiles += $parserRequirements
+}
+$requirementsHash = ($requirementsFiles | ForEach-Object {
+    (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
+}) -join ':'
 $marker = Join-Path $venvDir '.qqbot-requirements.sha256'
 $markerHash = ''
 if (Test-Path -LiteralPath $marker -PathType Leaf) {
@@ -355,7 +365,7 @@ $needsInstall = $markerHash -ne $requirementsHash
 
 if ($needsInstall) {
     if ($SkipInstall) {
-        Write-Warn 'requirements.lock changed, but -SkipInstall was requested; checking the existing environment'
+        Write-Warn 'dependency requirements changed, but -SkipInstall was requested; checking the existing environment'
     } else {
         Invoke-PipInstall
     }
