@@ -5,10 +5,10 @@
 #   - SnowLuma: Docker Compose (protocol endpoint only)
 #   - NoneBot, dashboard, optional gsuid_core: native Python + systemd
 #
-# This script creates the venv, installs requirements.lock, creates missing
-# configuration from the tracked examples, runs migrations, initializes the
-# dashboard password, prepares the SnowLuma compose files, and installs the
-# systemd units. start.sh starts the services.
+# This script creates the venv, installs requirements.lock and the media parser
+# requirements, creates missing configuration from the tracked examples, runs
+# migrations, initializes the dashboard password, prepares the SnowLuma compose
+# files, and installs the systemd units. start.sh starts the services.
 set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -190,16 +190,25 @@ ensure_venv() {
         log "skipping dependency installation (--no-deps)"
         return 0
     fi
-    local hash marker
-    hash="$(sha256sum "$ROOT/requirements.lock" | awk '{print $1}')"
+    local hash marker requirement_file
+    local -a requirement_files=("$ROOT/requirements.lock")
+    local -a pip_args=()
+    if [ -f "$ROOT/nonebot/media_parser/requirements.txt" ]; then
+        requirement_files+=("$ROOT/nonebot/media_parser/requirements.txt")
+    fi
+    for requirement_file in "${requirement_files[@]}"; do
+        pip_args+=(-r "$requirement_file")
+    done
+    hash="$(sha256sum "${requirement_files[@]}" | awk '{print $1}' | tr '\n' ':')"
+    hash="${hash%:}"
     marker="$ROOT/.venv/.qqbot-requirements.sha256"
     if [ -f "$marker" ] && [ "$(cat "$marker")" = "$hash" ]; then
         log "Python dependencies are up to date"
     else
         if command -v uv >/dev/null 2>&1; then
-            run uv pip install --python "$PIP" -r "$ROOT/requirements.lock"
+            run uv pip install --python "$PIP" "${pip_args[@]}"
         else
-            run "$PIP" -m pip install --disable-pip-version-check --no-input -r "$ROOT/requirements.lock"
+            run "$PIP" -m pip install --disable-pip-version-check --no-input "${pip_args[@]}"
         fi
         if [ "$DRY_RUN" -eq 1 ]; then
             log "would write dependency marker: $marker"

@@ -4,7 +4,7 @@
 
 - **SnowLuma（QQ 协议端）**：Docker Compose，默认只绑 `127.0.0.1`。
 - **NoneBot / 管理面板 / gsuid_core（可选）**：仓库根 `.venv` + systemd。
-- **依赖创建**：`install.sh` 创建 `.venv`、安装 `requirements.lock`、复制缺失配置、生成 OneBot token / VNC 密码、跑迁移、初始化面板密码。
+- **依赖创建**：`install.sh` 创建 `.venv`、安装 `requirements.lock` 和 `nonebot/media_parser/requirements.txt`、复制缺失配置、生成 OneBot token / VNC 密码、跑迁移、初始化面板密码。
 - **服务创建**：安装 `qqbot.service`、`qqbot-dashboard.service`，检测到 gsuid 时安装 `qqbot-gsuid-core.service` 和启动顺序 drop-in。
 
 > 机器人本体不放进 Docker；这是开发服务器当前的生产形态。若要把 NoneBot 也容器化，需要单独的 Dockerfile、数据卷和 RAG/Playwright 编排，属于另一项改动。
@@ -47,7 +47,7 @@ sudo bash deploy-linux/install.sh
 
 | 路径 | 说明 |
 |---|---|
-| `.venv/` | 根虚拟环境，安装 `requirements.lock` |
+| `.venv/` | 根虚拟环境，安装 `requirements.lock` 与 `media_parser` 解析依赖 |
 | `nonebot/.env` | 从 `.env.example` 复制；保留已有文件 |
 | `nonebot/configs/models.yml` | 从 `.example` 复制；保留已有文件 |
 | `nonebot/configs/templates.yml` | 从 `.example` 复制；保留已有文件 |
@@ -55,6 +55,8 @@ sudo bash deploy-linux/install.sh
 | `compose.yml` | 从 `docker/snowluma/docker-compose.yml` 复制，已忽略 |
 | `snowluma/` | SnowLuma 配置与数据，已忽略 |
 | `nonebot/data/dashboard-initial-password` | 首次面板初始化的一次性密码，0600 |
+
+依赖摘要同时覆盖 `requirements.lock` 和 `nonebot/media_parser/requirements.txt`；任一文件变化都会触发重装。干净环境也会装上 `yt-dlp` 等链接解析依赖。
 
 安装不会覆盖已有的 `.env`、`models.yml`、`templates.yml`、`.env.local`、`compose.yml` 或数据目录。若 `.env` 里仍是占位 token，会生成一个随机 `ONEBOT_ACCESS_TOKEN`；SnowLuma WebUI 要填同一个值。
 

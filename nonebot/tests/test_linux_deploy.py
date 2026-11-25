@@ -38,6 +38,14 @@ def test_shell_scripts_parse() -> None:
         assert result.returncode == 0, f'{script}: {result.stderr}'
 
 
+def test_install_includes_parser_requirements() -> None:
+    text = (DEPLOY_DIR / 'install.sh').read_text(encoding='utf-8')
+    assert 'nonebot/media_parser/requirements.txt' in text
+    assert 'requirement_files+=("$ROOT/nonebot/media_parser/requirements.txt")' in text
+    assert 'sha256sum "${requirement_files[@]}"' in text
+    assert 'pip_args+=(-r "$requirement_file")' in text
+
+
 def test_install_check_without_docker_or_systemd() -> None:
     env = os.environ.copy()
     env['PYTHON'] = sys.executable
@@ -61,7 +69,7 @@ def test_dry_run_does_not_create_runtime_files(tmp_path: Path) -> None:
     root = tmp_path / 'repo'
     (root / 'nonebot' / 'configs').mkdir(parents=True)
     (root / 'docker' / 'snowluma').mkdir(parents=True)
-    for relative in ('nonebot/bot.py', 'requirements.lock'):
+    for relative in ('nonebot/bot.py', 'requirements.lock', 'nonebot/media_parser/requirements.txt'):
         (root / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / relative, root / relative)
     for relative in ('nonebot/.env.example', 'nonebot/configs/models.yml.example', 'nonebot/configs/templates.yml.example'):
@@ -87,6 +95,7 @@ def test_dry_run_does_not_create_runtime_files(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert 'install complete' in result.stdout
+    assert 'media_parser/requirements.txt' in result.stdout
     assert not (root / '.venv').exists()
     assert not (root / 'nonebot' / '.env').exists()
     assert not (root / 'compose.yml').exists()
