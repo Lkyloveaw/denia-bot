@@ -217,6 +217,23 @@ def test_shader_primary_action_uses_readable_theme_colors():
     assert 'color:var(--paper)' not in joined
 
 
+def test_host_overview_logs_and_sticker_tools_are_wired():
+    text = _html()
+    for element_id in (
+        'hostCpuPercent', 'statusCores', 'statusSystem', 'statusDeps',
+        'memeImportState', 'logPause', 'logCounts',
+        'chatLog', 'chatInput', 'chatSend', 'chatModel',
+    ):
+        assert f'id="{element_id}"' in text, element_id
+    assert 'id="modernControls"' in text
+    assert 'class="host-overview"' in text
+    assert 'async function importMemes' in text
+    assert 'async function autoTagMemes' in text
+    assert 'async function sendModelChat' in text
+    assert "'/api/model/chat'" in text
+    assert 'function startLogPolling' in text
+
+
 def test_bilibili_credentials_import_and_qr_are_wired():
     text = _html()
     parser = _between(text, '<section id="parser"', '</section>')

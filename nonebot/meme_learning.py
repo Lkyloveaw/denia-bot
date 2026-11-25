@@ -110,12 +110,15 @@ class Store:
     def enqueue(self, owner, content, admitted=False):
         mime = meme_logic.image_mime(content)
         digest = hashlib.sha256(content).hexdigest()
+        self.library.backfill()
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             mode = db.execute('SELECT enabled FROM meme_learning_mode WHERE owner=?', (str(owner),)).fetchone()
             if not admitted and (not mode or not mode[0]):
                 return 'disabled'
-            if db.execute("SELECT 1 FROM meme_learning_jobs WHERE digest=? AND status IN ('pending','failed','inflight')", (digest,)).fetchone() or db.execute('SELECT 1 FROM meme_details WHERE digest=?', (digest,)).fetchone():
+            if (db.execute("SELECT 1 FROM meme_learning_jobs WHERE digest=? AND status IN ('pending','failed','inflight')", (digest,)).fetchone()
+                    or db.execute('SELECT 1 FROM image_meta WHERE digest=?', (digest,)).fetchone()
+                    or db.execute('SELECT 1 FROM meme_details WHERE digest=?', (digest,)).fetchone()):
                 return 'duplicate'
             count = db.execute("SELECT COUNT(*) FROM meme_learning_jobs WHERE status IN ('pending','failed','inflight')").fetchone()[0]
             if count >= MAX_PENDING:
@@ -167,6 +170,7 @@ class Store:
         name, category_description, description = str(name).strip(), str(category_description).strip(), str(description).strip()
         if not name or len(name) > 40 or any(c in name for c in '/\\\r\n') or not description or len(description) > 1000 or len(category_description) > 300:
             raise ValueError('识别结果无效')
+        self.library.backfill()
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             job = db.execute("SELECT digest,content,mime FROM meme_learning_jobs WHERE id=? AND status IN ('pending','inflight')", (job_id,)).fetchone()
@@ -178,22 +182,28 @@ class Store:
             else:
                 category_id = secrets.token_hex(6)
                 db.execute('INSERT INTO categories VALUES (?,?,?)', (category_id, name, category_description))
-            if not db.execute('SELECT 1 FROM meme_details WHERE digest=?', (job[0],)).fetchone():
-                image_id = secrets.token_hex(6)
-                db.execute('INSERT INTO images VALUES (?,?,?,?)', (image_id, category_id, job[1], job[2]))
-                db.execute('INSERT INTO meme_details VALUES (?,?,?,?)', (image_id, job[0], description, json.dumps(vector)))
+            image_id, _created = meme_logic.insert_image(
+                db, category_id, job[1], source=''
+            )
+            if not db.execute('SELECT 1 FROM meme_details WHERE image_id=?', (image_id,)).fetchone():
+                db.execute('INSERT INTO meme_details(image_id,digest,description,vector) VALUES (?,?,?,?)',
+                           (image_id, job[0], description, json.dumps(vector)))
             db.execute("UPDATE meme_learning_jobs SET status='done',content=NULL,error='' WHERE id=?", (job_id,))
 
     def choose(self, category_id, vector):
         vector = valid_vector(vector)
         query_norm = math.sqrt(sum(x*x for x in vector))
         with self.db() as db:
-            # Keep earlier manually uploaded images usable even without a description.
-            if secrets.randbelow(5) == 0:
-                manual = db.execute('SELECT i.id FROM images i LEFT JOIN meme_details d ON d.image_id=i.id WHERE i.category=? AND d.image_id IS NULL ORDER BY RANDOM() LIMIT 1', (category_id,)).fetchone()
-                if manual:
-                    return self.library.image_info(manual[0])
+            manual_ids = [row[0] for row in db.execute(
+                'SELECT i.id FROM images i LEFT JOIN meme_details d ON d.image_id=i.id '
+                'WHERE i.category=? AND d.image_id IS NULL',
+                (category_id,),
+            ).fetchall()]
             rows = db.execute('SELECT i.id,d.vector FROM images i JOIN meme_details d ON d.image_id=i.id WHERE i.category=?', (category_id,)).fetchall()
+        if manual_ids and secrets.randbelow(5) == 0:
+            chosen = self.library.choose(category_id, image_ids=manual_ids)
+            if chosen:
+                return chosen
         best = None
         for image_id, encoded in rows:
             try:

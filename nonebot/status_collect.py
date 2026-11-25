@@ -496,8 +496,13 @@ def panel_snapshot(*, top_n: int = 6, disk_paths: Iterable[str] | None = None) -
         time.sleep(0.15)
         _PANEL_PRIMED = True
     load = load_per_core()
+    cpu = cpu_snapshot()
+    try:
+        cpu['per_core'] = [round(float(value), 1) for value in psutil.cpu_percent(interval=0.05, percpu=True)]
+    except Exception:
+        cpu['per_core'] = []
     return {
-        'cpu': cpu_snapshot(),
+        'cpu': cpu,
         'memory': memory_snapshot(),
         'swap': swap_snapshot(),
         'disks': disk_snapshot(disk_paths),

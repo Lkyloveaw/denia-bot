@@ -155,3 +155,43 @@ def test_manual_images_remain_eligible_after_learning(tmp_path):
         assert store.choose(category, [1, 0])[0] == image('blue')
     with patch.object(learning.secrets, 'randbelow', return_value=1):
         assert store.choose(category, [1, 0])[0] == image('red')
+
+
+def test_manual_branch_uses_library_weights(tmp_path):
+    lib = meme_logic.Library(tmp_path)
+    store = learning.Store(lib)
+    category = lib.put_category('开心', '庆祝')
+    blue, _ = lib.add_image(category, image('blue'), weight=0.2)
+    green, _ = lib.add_image(category, image('green'), weight=5.0)
+    store.set_enabled('42', True)
+    store.enqueue('42', image('red'))
+    store.complete(store.next_job()['id'], '开心', '庆祝', '红色', [1, 0])
+    seen = {}
+    def choose(rows, weights, k):
+        seen['ids'] = [row[0] for row in rows]
+        seen['weights'] = {row[0]: weight for row, weight in zip(rows, weights)}
+        return [rows[0]]
+    with patch.object(learning.secrets, 'randbelow', return_value=0), \
+         patch.object(meme_logic.random, 'choices', choose):
+        chosen = store.choose(category, [1, 0])
+    assert set(seen['ids']) == {blue, green}
+    assert seen['weights'][blue] == 0.2
+    assert seen['weights'][green] == 5.0
+    assert chosen[0] in (image('blue'), image('green'))
+
+
+def test_complete_reuses_uploaded_image_and_attaches_details(tmp_path):
+    lib = meme_logic.Library(tmp_path)
+    store = learning.Store(lib)
+    category = lib.put_category('开心', '庆祝')
+    store.set_enabled('42', True)
+    store.enqueue('42', image('red'))
+    job = store.next_job()
+    image_id, created = lib.add_image(category, image('red'))
+    assert created is True
+    store.complete(job['id'], '开心', '庆祝', '红色', [1, 0])
+    assert lib.categories()[0]['count'] == 1
+    with store.db() as db:
+        assert db.execute('SELECT image_id FROM meme_details').fetchone()[0] == image_id
+        assert db.execute("SELECT status FROM meme_learning_jobs WHERE id=?", (job['id'],)).fetchone()[0] == 'done'
+    assert store.enqueue('42', image('red')) == 'duplicate'

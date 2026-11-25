@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,7 +48,7 @@ def test_gateway_chat_requests_include_isolated_session_headers():
         first = next(header for body, header in seen[:2] if body == 'private_111')
         second = next(header for body, header in seen[:2] if body == 'private_222')
         assert len(seen) == 4 and first == seen[2][1] and first != second
-        assert all('111' not in value and '222' not in value for _, value in seen[:3])
+        assert all(re.fullmatch(r'qqbot-[0-9a-f]{24}', value) for _, value in seen[:3])
         assert seen[3][1] == 'explicit'
     asyncio.run(run())
 

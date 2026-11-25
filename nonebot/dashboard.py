@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -20,7 +21,9 @@ import bot_updater
 import bot_identity
 import dashboard_onboarding
 import meme_logic
+import meme_catalog
 import memory_logic as memory
+import model_chat
 import model_pref_panel
 import group_topics_logic as topics
 import weather_service as weather
@@ -45,6 +48,7 @@ import status_grafana as status_grafana_mod
 import status_logic as status_logic_mod
 import status_llm as status_llm_mod
 import status_store as status_store_mod
+import system_info
 import superuser_settings
 import theme_panel
 import xhs_login
@@ -52,8 +56,20 @@ from bot_monitor import Monitor, Restart, RestartController, WindowsRestart  # n
 
 ROOT = Path(__file__).resolve().parent
 AUTH_FILE = ROOT / 'data' / 'dashboard-auth.json'
+_GROUP_ID = re.compile(r'^[0-9]{1,20}$')
 attempts = {}
 log = logging.getLogger(__name__)
+
+
+def _group_id(value, *, empty_message='群号无效'):
+    text = '' if value is None else str(value).strip()
+    if not text:
+        raise HTTPException(400, empty_message)
+    if not _GROUP_ID.fullmatch(text):
+        raise HTTPException(400, '群号无效')
+    if not any(char != '0' for char in text):
+        raise HTTPException(400, '群号无效')
+    return text
 
 
 def onboarding_path() -> Path:
@@ -245,16 +261,63 @@ async def delete_meme_category(req: Request):
     return {'ok': True}
 
 
+@app.post('/api/memes/import')
+async def import_memes(req: Request):
+    mutate(req)
+    try:
+        return await asyncio.to_thread(meme_catalog.import_tree, meme_library)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post('/api/memes/auto-tag')
+async def auto_tag_memes(req: Request):
+    mutate(req)
+    try:
+        body = await req.json()
+    except Exception as exc:
+        raise HTTPException(400, '请求体不是合法 JSON') from exc
+    category = str((body or {}).get('category') or '') if isinstance(body, dict) else ''
+    try:
+        return await asyncio.to_thread(meme_catalog.auto_tag_library, meme_library, category or None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post('/api/memes/metadata')
+async def update_meme_metadata(req: Request):
+    mutate(req)
+    try:
+        body = await req.json()
+    except Exception as exc:
+        raise HTTPException(400, '请求体不是合法 JSON') from exc
+    if not isinstance(body, dict):
+        raise HTTPException(400, '请求体必须是对象')
+    try:
+        return meme_library.set_metadata(body.get('id', ''), tags=body.get('tags'), weight=body.get('weight'))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post('/api/memes/image')
-async def upload_meme_image(req: Request, category: str):
+async def upload_meme_image(req: Request, category: str, tags: str | None = None, weight: float | None = None):
     mutate(req)
     content = bytearray()
     async for chunk in req.stream():
         content.extend(chunk)
         if len(content) > meme_logic.MAX_IMAGE_BYTES:
             raise HTTPException(413, '图片大小须在 5 MB 以内')
+    payload = bytes(content)
     try:
-        return {'id': meme_library.add_image(category, bytes(content))}
+        def save_upload():
+            mime = meme_logic.image_mime(payload)
+            category_name = next((item['name'] for item in meme_library.categories() if item['id'] == category), '')
+            final_tags = meme_catalog.auto_tags(category_name, '', payload) if tags is None else tags
+            final_weight = meme_catalog.auto_weight(category_name) if weight is None else weight
+            return meme_library.add_image(category, payload, tags=final_tags, weight=final_weight, mime=mime)
+
+        image_id, created = await asyncio.to_thread(save_upload)
+        return {'id': image_id, 'created': created}
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -623,6 +686,23 @@ async def list_model_upstream(req: Request):
     except OSError:
         raise HTTPException(503, '无法读取模型提供商配置')
 
+@app.post('/api/model/chat')
+async def test_model_chat(req: Request):
+    mutate(req)
+    try:
+        body = await req.json()
+    except Exception as exc:
+        raise HTTPException(400, '请求体不是合法 JSON') from exc
+    if not isinstance(body, dict):
+        raise HTTPException(400, '请求体必须是对象')
+    try:
+        return await model_chat.chat(body.get('messages'), model=body.get('model'))
+    except model_chat.ChatError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        log.warning('model chat test failed: %s', type(exc).__name__)
+        raise HTTPException(502, '模型测试失败') from exc
+
 @app.get('/api/persona')
 def persona_config(req: Request):
     authorized(req)
@@ -896,16 +976,25 @@ async def clear_token_usage(req: Request):
 @app.get('/api/group/{gid}')
 def group(gid: str, req: Request):
     authorized(req)
-    if not gid.isdigit(): raise HTTPException(400)
+    gid = _group_id(gid)
     return {'enabled':topics.enabled(topics.DEFAULT_PATH,gid),'topics':topics.top(topics.DEFAULT_PATH,gid,limit=20), 'speakers':topics.speaker_top(topics.DEFAULT_PATH,gid,limit=20)}
 
 @app.post('/api/topic')
 async def topic(req: Request):
-    mutate(req); b=await req.json(); gid=str(b.get('group','')); action=b.get('action')
-    if not gid.isdigit() or int(gid)<=0 or action not in ('开','关','清除'): raise HTTPException(400)
-    if action=='清除': topics.clear(topics.DEFAULT_PATH,gid)
+    mutate(req)
+    try:
+        b = await req.json()
+    except Exception as exc:
+        raise HTTPException(400, '请求体不是合法 JSON') from exc
+    if not isinstance(b, dict):
+        raise HTTPException(400, '请求体必须是对象')
+    gid = _group_id(b.get('group', ''), empty_message='请先选择或输入群号')
+    action = b.get('action')
+    if action not in ('开', '关', '清除'):
+        raise HTTPException(400, '操作无效')
+    if action == '清除': topics.clear(topics.DEFAULT_PATH,gid)
     else: topics.set_enabled(topics.DEFAULT_PATH,gid,action=='开')
-    return {'ok':True}
+    return {'ok':True, 'group':gid}
 
 @app.post('/api/memory')
 async def change_memory(req: Request):
@@ -1125,6 +1214,7 @@ def status_overview(req: Request, days: int = 1):
         'range_days': days,
         'live': live,
         'host': str(state.get('host') or ''),
+        'system': system_info.snapshot(),
         'bot': panel,
         'counters': state.section('counters'),
         'llm': llm,

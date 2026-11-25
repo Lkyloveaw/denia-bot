@@ -310,6 +310,10 @@ sqlite3 nonebot/data/memes/library.sqlite3 'DELETE FROM meme_details;'
 `nonebot/dashboard.py` 提供运行状态与配置管理接口：群话题、天气推送、主人设置、解析器配置、B站动态接收目标。
 面板要求密码（`data/dashboard-auth.json`），所有写操作需要二次确认。
 
+- 「服务器状态」顶部显示主机名、系统、CPU 型号与逐核占用、内存/SWAP、可执行文件、进程 PID 和依赖版本；下方保留历史趋势、磁盘、进程、异常与状态卡配置。
+- 「运行日志」可按来源、级别和关键词筛选；支持暂停自动刷新、复制、下载和实时轮询，并在同一页提供默认模型提供商的 WebUI 对话测试。
+- 「表情包」可从固定目录 `nonebot/data/stickers` 一键导入，按文件夹建分类并自动写入角色、场景、风格、情绪标签和分组权重；重复图片按 SHA-256 跳过。
+
 ## 8.0 首次启动与登录
 
 首次部署先在 `nonebot/` 下执行：

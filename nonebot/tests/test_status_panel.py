@@ -282,6 +282,12 @@ class PanelTest(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(result['error'], 'bucket 名称不合法')
 
+    def test_overview_exposes_system_info(self):
+        fake = {'hostname': 'test-host', 'os': 'Windows 11', 'dependencies': [{'name': 'fastapi', 'version': '1'}]}
+        with patch.object(dashboard.system_info, 'snapshot', return_value=fake):
+            data = dashboard.status_overview(None)
+        self.assertEqual(data['system'], fake)
+
 
 class FakeRequest:
     def __init__(self, payload):
