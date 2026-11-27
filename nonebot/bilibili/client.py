@@ -3,6 +3,8 @@ import asyncio
 import hashlib
 import json
 import re
+import time
+from urllib.parse import urlencode
 
 import httpx
 
@@ -11,14 +13,58 @@ from .auth import cookie_header
 
 SPACE = '/x/polymer/web-dynamic/v1/feed/space'
 CARD = '/x/web-interface/card'
-SEARCH = '/x/web-interface/search/type'
-PATHS = {SPACE, CARD, SEARCH}
+SPI = '/x/frontend/finger/spi'
+NAV = '/x/web-interface/nav'
+SEARCH = '/x/web-interface/wbi/search/type'
+PATHS = {SPACE, CARD}
+_BROWSER_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+               'AppleWebKit/537.36 (KHTML, like Gecko) '
+               'Chrome/131.0.0.0 Safari/537.36')
+_JSON_HEADERS = {
+    'User-Agent': _BROWSER_UA,
+    'Referer': 'https://www.bilibili.com/',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Encoding': 'identity',
+}
+_WBI_MIXIN_TAB = (
+    46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
+    27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13,
+    37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
+    22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
+)
 
 
 def mapping(value):
     if not isinstance(value,dict):
         raise BiliError('REMOTE_SCHEMA')
     return value
+
+
+def wbi_mixin_key(img_url, sub_url):
+    def key(value):
+        if not isinstance(value, str):
+            raise BiliError('REMOTE_SCHEMA')
+        value = value.rsplit('/', 1)[-1].split('.')[0]
+        if not value or len(value) > 128:
+            raise BiliError('REMOTE_SCHEMA')
+        return value
+    raw = key(img_url) + key(sub_url)
+    if len(raw) < max(_WBI_MIXIN_TAB) + 1:
+        raise BiliError('REMOTE_SCHEMA')
+    return ''.join(raw[index] for index in _WBI_MIXIN_TAB)[:32]
+
+
+def wbi_sign(params, mixin_key, *, now=None):
+    if not isinstance(mixin_key, str) or len(mixin_key) != 32:
+        raise BiliError('REMOTE_SCHEMA')
+    values = {}
+    for key, value in params.items():
+        text = str(value)
+        values[str(key)] = ''.join(char for char in text if char not in "!'()*")
+    values['wts'] = str(int(time.time() if now is None else now))
+    query = urlencode(sorted(values.items()))
+    values['w_rid'] = hashlib.md5((query + mixin_key).encode('utf-8')).hexdigest()
+    return values
 
 
 def normalize_item(raw, uid, depth=0):
@@ -97,6 +143,7 @@ class BiliClient:
         self.authentication_failed = False
         self._auth_identity = None
         self._auth_rejected = None
+        self._search_cache = None
 
     def _login_headers(self):
         try:
@@ -125,18 +172,16 @@ class BiliClient:
     async def __aexit__(self,*args): await self.close()
     async def close(self): await self.http.aclose()
 
-    async def _read(self,path,params):
-        if path not in PATHS:
+    async def _request_json(self,path,params,*,headers=None,cookies=None,
+                            allowed_codes=(0,),authenticated=False):
+        if path not in {SPACE,CARD,SPI,NAV,SEARCH}:
             raise BiliError('INVALID_ARGUMENT')
         if self.restricted:
             raise BiliError('REMOTE_RESTRICTED')
-        # Search deliberately retains its existing anonymous-public contract;
-        # it is never an authentication fallback for UID/feed requests.
-        authenticated = self.cookie_provider is not None and path != SEARCH
         self.http.cookies.clear()
         try:
-            headers = self._login_headers() if authenticated else {}
-            async with self.http.stream('GET',path,params=params,headers=headers) as response:
+            async with self.http.stream('GET',path,params=params,
+                                        headers=headers or {},cookies=cookies or {}) as response:
                 if response.status_code in {403,412,429}:
                     self.restricted = True
                     raise BiliError('REMOTE_RESTRICTED')
@@ -161,17 +206,18 @@ class BiliClient:
                 if type(code) is not int: raise BiliError('REMOTE_SCHEMA')
                 if code in {-352,-412,-509}:
                     self.restricted=True
+                    raise BiliError('REMOTE_RESTRICTED')
                 if authenticated and code in {-101,-111}:
                     self.authentication_failed = True
                     self._auth_rejected = self._auth_identity
-            if code in {-352,-412,-509}:
-                raise BiliError('REMOTE_RESTRICTED')
-            if code in {-101,-111}:
-                raise BiliError('REMOTE_AUTH_REQUIRED')
-            if code != 0: raise BiliError('REMOTE_HTTP')
-            if authenticated:
-                self.authentication_failed = False
-            return mapping(body.get('data'))
+                    raise BiliError('REMOTE_AUTH_REQUIRED')
+                if code in {-101,-111} and code not in allowed_codes:
+                    raise BiliError('REMOTE_AUTH_REQUIRED')
+                if code not in allowed_codes:
+                    raise BiliError('REMOTE_HTTP')
+                if authenticated:
+                    self.authentication_failed = False
+                return mapping(body.get('data'))
         except httpx.TimeoutException as exc:
             raise BiliError('DEADLINE') from exc
         except httpx.HTTPError as exc:
@@ -183,11 +229,44 @@ class BiliClient:
             # nor leaks into a subsequent anonymous search or another account.
             self.http.cookies.clear()
 
+    async def _read(self,path,params):
+        if path not in PATHS:
+            raise BiliError('INVALID_ARGUMENT')
+        if self.restricted:
+            raise BiliError('REMOTE_RESTRICTED')
+        authenticated = self.cookie_provider is not None
+        headers = self._login_headers() if authenticated else None
+        return await self._request_json(path,params,headers=headers,authenticated=authenticated)
+
     async def _get(self,path,params):
         try:
             return await asyncio.wait_for(self._read(path,params),15)
         except asyncio.TimeoutError as exc:
             raise BiliError('DEADLINE') from exc
+
+    async def _get_json(self,path,params,**kwargs):
+        try:
+            return await asyncio.wait_for(self._request_json(path,params,**kwargs),15)
+        except asyncio.TimeoutError as exc:
+            raise BiliError('DEADLINE') from exc
+
+    async def _search_context(self):
+        now=time.monotonic()
+        if self._search_cache is not None and self._search_cache[0]>now:
+            return self._search_cache[1],self._search_cache[2]
+        spi=await self._get_json(SPI,{},headers=_JSON_HEADERS)
+        cookies={}
+        for name,value in (('buvid3',spi.get('b_3')),('buvid4',spi.get('b_4'))):
+            if (not isinstance(value,str) or not value or len(value)>512 or
+                    any(ord(char)<0x21 or ord(char)>0x7e or char in ';,"\\' for char in value)):
+                raise BiliError('REMOTE_SCHEMA')
+            cookies[name]=value
+        nav=await self._get_json(NAV,{},headers=_JSON_HEADERS,cookies=cookies,
+                                 allowed_codes=(0,-101))
+        wbi=mapping(nav.get('wbi_img'))
+        key=wbi_mixin_key(wbi.get('img_url'),wbi.get('sub_url'))
+        self._search_cache=(now+3600,cookies,key)
+        return cookies,key
 
     async def avatar(self,item):
         """One bounded read from the pinned avatar CDN; no credential, no redirects."""
@@ -267,19 +346,22 @@ class BiliClient:
     async def search(self,keyword):
         if not isinstance(keyword,str) or not 1<=len(keyword)<=100:
             raise BiliError('INVALID_ARGUMENT')
-        data = await self._get(SEARCH,{'search_type':'video','keyword':keyword,'page':1,'page_size':5})
-        values = data.get('result')
+        cookies,key = await self._search_context()
+        params = wbi_sign({'search_type':'video','keyword':keyword,'page':1,'page_size':5},key)
+        headers = {**_JSON_HEADERS,'Referer':'https://search.bilibili.com/'}
+        data = await self._get_json(SEARCH,params,headers=headers,cookies=cookies)
+        values = data.get('result',[])
         if not isinstance(values,list) or len(values)>100:
             raise BiliError('REMOTE_SCHEMA')
         result = []
         for raw in values[:5]:
             value = mapping(raw)
+            if value.get('is_pay') or value.get('is_charge'):
+                continue
             bvid = value.get('bvid')
             if not isinstance(bvid,str) or not re.fullmatch(r'BV[0-9A-Za-z]{10}',bvid):
                 raise BiliError('REMOTE_SCHEMA')
-            # Anonymous video search is public; do not reuse authenticated results.
-            if value.get('is_pay') or value.get('is_charge'):
-                continue
+            # Search remains anonymous; only WBI/buvid cookies are sent.
             result.append(clean(value.get('title'),200)+'\nUP：'+clean(value.get('author'),80)+
                 '\n'+clean(value.get('description',''),500)+'\nhttps://www.bilibili.com/video/'+bvid)
         return tuple(result)
