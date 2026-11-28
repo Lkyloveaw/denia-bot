@@ -17,6 +17,7 @@ Struct 定义在函数体内，注解被延迟成字符串后，msgspec 解析�
 import asyncio
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -45,6 +46,25 @@ HEIF_BRANDS = (b"heic", b"heix", b"mif1", b"heim", b"heis", b"hevc", b"hevx")
 """HEIF/HEIC 的 ftyp brand。苹果手机传的原图常是这种格式，QQ 显示不了。"""
 
 PREVIEW_TIMEOUT = 5
+
+_TOPIC_MARKUP = re.compile(r"(#[^#\[\]\r\n]+)\[话题\]#")
+
+
+def _note_description(desc: str) -> str:
+    """小红书网页用专用标记表示话题和贴纸，普通方括号保留原文。"""
+    return _TOPIC_MARKUP.sub(r"\1#", desc).replace("[喝奶茶R]", "🧋")
+
+
+def _published_at(value: object) -> int | None:
+    """把可选的网页发布时间统一为 Unix 秒，忽略无效的元数据。"""
+    if type(value) is not int or value <= 0:
+        return None
+    seconds = value // 1000 if value >= 10**12 else value
+    try:
+        datetime.fromtimestamp(seconds)
+    except (OverflowError, OSError, ValueError):
+        return None
+    return seconds
 
 
 def cached_image_path(cache_dir: Path, url: str, prefix: str = "") -> Path | None:
@@ -427,6 +447,7 @@ class XHSParser(BaseParser):
             title: str
             desc: str
             user: User
+            time: Any = None
             imageList: list[Image] = field(default_factory=list)
             video: Video | None = None
 
@@ -468,7 +489,8 @@ class XHSParser(BaseParser):
 
         return self.result(
             title=note_detail.title,
-            text=note_detail.desc,
+            text=_note_description(note_detail.desc),
+            timestamp=_published_at(note_detail.time),
             author=author,
             contents=contents,
         )
@@ -506,7 +528,7 @@ class XHSParser(BaseParser):
             type: str | None = None
             title: str | None = None
             desc: str | None = None
-            time: int = 0
+            time: Any = None
             lastUpdateTime: int = 0
             imageList: list[Image] = field(default_factory=list)  # 有水印
             video: Video | None = None
@@ -548,8 +570,8 @@ class XHSParser(BaseParser):
             title=note_data.title or "",
             author=self.create_author(note_data.user.nickName, note_data.user.avatar),
             contents=contents,
-            text=note_data.desc or "",
-            timestamp=(note_data.time or 0) // 1000,
+            text=_note_description(note_data.desc or ""),
+            timestamp=_published_at(note_data.time),
         )
 
     def _extract_initial_state_json(self, html: str) -> dict[str, Any]:

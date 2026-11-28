@@ -94,6 +94,25 @@ class ParserCardTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('1970-', html)
         self.assertEqual(len(result.img_contents), 11)
 
+    async def test_seventeen_portraits_keep_top_and_bottom_in_both_album_thumbnails(self):
+        with TemporaryDirectory() as folder:
+            photo = Path(folder) / 'portrait.png'
+            with Image.new('RGB', (600, 800), 'gray') as portrait:
+                portrait.paste('red', (0, 0, 600, 80))
+                portrait.paste('blue', (0, 720, 600, 800))
+                portrait.save(photo)
+            result = ParseResult(platform=Platform('xhs', '小红书'), title='相册',
+                                 contents=[ImageContent(photo) for _ in range(17)])
+            html = await self.build(result)
+        self.assertEqual(natural_sizes(html), [(450, 600), (276, 368), (276, 368)])
+        uris = re.findall(r'<img src="data:image/jpeg;base64,([^"]+)"', html)
+        for uri in uris[1:]:
+            with Image.open(BytesIO(base64.b64decode(uri))) as thumb:
+                self.assertGreater(thumb.getpixel((thumb.width // 2, 2))[0], 230)
+                self.assertGreater(thumb.getpixel((thumb.width // 2, thumb.height - 3))[2], 230)
+        self.assertIn('另 14 张', html)
+        self.assertEqual(len(result.img_contents), 17)
+
     async def test_note_promotes_first_decodable_preview_and_counts_only_displayed_tiles(self):
         with TemporaryDirectory() as folder:
             missing = Path(folder) / 'missing'

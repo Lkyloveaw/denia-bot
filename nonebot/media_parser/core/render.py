@@ -36,7 +36,9 @@ STYLE='''
 .note-album{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .album-lead,.album-thumb,.video-frame{position:relative;min-width:0}
 .album-lead{grid-column:1/-1;justify-self:center;max-width:100%}
-.note-album img{display:block;border-radius:12px}.album-thumb img{width:100%;aspect-ratio:2/1;object-fit:cover}
+.note-album img{display:block;border-radius:12px}
+.album-thumb{display:grid;place-self:center;place-items:center;max-width:100%;border-radius:12px;background:#f1eee9}
+.album-thumb>*{grid-area:1/1}.album-thumb .media-badge{position:static;place-self:end;margin:0 12px 12px 0}
 .video-frame{width:fit-content;max-width:100%;margin:0 auto}
 .media-badge{position:absolute;right:12px;bottom:12px;border-radius:9px;padding:4px 12px;
   background:rgba(25,24,33,.86);color:#fff;font-size:27px;line-height:1.35;font-variant-numeric:tabular-nums}
@@ -167,7 +169,10 @@ class Renderer:
             candidates = candidates[needed:]
             for path in paths:
                 if tiles:
-                    uri = await asyncio.to_thread(image_uri, path, width=thumb_width, height=thumb_width // 2, crop=True)
+                    uri = await asyncio.to_thread(
+                        image_uri, path, width=thumb_width, height=thumb_width // 2,
+                        crop=True, portrait_fit_height=thumb_width,
+                    )
                 else:
                     uri = await asyncio.to_thread(image_uri, path, width=width, height=600)
                 if uri:
