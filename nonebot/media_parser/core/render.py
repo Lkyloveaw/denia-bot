@@ -6,10 +6,12 @@ Pillow in card_document is only used to resize/encode already downloaded assets.
 from __future__ import annotations
 import asyncio
 import base64
+from datetime import datetime
+from math import isfinite
 from pathlib import Path
 import uuid
 from nonebot import logger
-from card_document import document, text, paragraphs, image_uri, chunks
+from card_document import document, text, paragraphs, image_uri, split_text
 from render_client import render_document_async
 from .data import ParseResult
 from .perf import mark, phase
@@ -26,6 +28,18 @@ STYLE='''
 .grid{display:grid;gap:8px}.grid img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px}
 .cover img{display:block;max-height:700px;width:100%;object-fit:contain;border-radius:12px}
 .caption{font-size:18px;color:#6b645a;text-align:center}h1{font-size:32px}.more{color:#6b645a;font-size:18px}
+.note-header .avatar{width:52px;height:52px}
+.note-header .author-info{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px}
+.note-header .author strong{font-size:29px}.note-header time{font-size:26px;color:#625c55}
+.sheet>.note-header{margin-bottom:20px}.sheet>.note-title{margin-bottom:12px}
+.title.note-title{font-size:48px;line-height:1.35}.note-intro{font-size:32px;line-height:1.5;color:#4f4c49}
+.note-album{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.album-lead,.album-thumb,.video-frame{position:relative;min-width:0}
+.album-lead{grid-column:1/-1;justify-self:center;max-width:100%}
+.note-album img{display:block;border-radius:12px}.album-thumb img{width:100%;aspect-ratio:2/1;object-fit:cover}
+.video-frame{width:fit-content;max-width:100%;margin:0 auto}
+.media-badge{position:absolute;right:12px;bottom:12px;border-radius:9px;padding:4px 12px;
+  background:rgba(25,24,33,.86);color:#fff;font-size:27px;line-height:1.35;font-variant-numeric:tabular-nums}
 /* 转发：每个内容块各自是分页单元，但相邻块之间不留缝，拼成一个连续的引用框；
    嵌套层数用左侧竖条数量表示（box-shadow 画条），不再一层套一层边框。 */
 .sheet>.repost{margin-bottom:0;padding-top:8px;padding-bottom:8px;padding-right:20px;background:#f1eee9}
@@ -34,6 +48,30 @@ STYLE='''
 .sheet>.repost:last-child{margin-bottom:0}
 .repost-label{font-size:18px;color:#6b645a;margin:0 0 10px}
 '''
+
+def _caption_lead(body: str) -> tuple[str, str]:
+    """Put one short opening paragraph before the media; keep the rest for normal pagination."""
+    body = body.strip()
+    limit = 72
+    if len(body) <= limit and body.count('\n') <= 2:
+        return body, ''
+    first_line = body.partition('\n')[0].rstrip('\r')
+    # Use the pagination splitter's punctuation boundaries without scanning the entire post.
+    lead = first_line
+    if len(first_line) > limit:
+        lead = split_text(first_line[:limit + 1], limit)[0]
+    return lead, body[len(lead):].lstrip('\r\n')
+
+
+def _video_cover(uri: str, duration: float | None) -> str:
+    image = f'<img src="{uri}">'
+    if isinstance(duration, (int, float)) and isfinite(duration) and duration >= 1:
+        minutes, seconds = divmod(int(duration), 60)
+        hours, minutes = divmod(minutes, 60)
+        label = f'{hours}:{minutes:02}:{seconds:02}' if hours else f'{minutes:02}:{seconds:02}'
+        image = f'<div class="video-frame">{image}<span class="media-badge">{label}</span></div>'
+    return f'<div class="cover">{image}</div>'
+
 
 class Renderer:
     DEFAULT_CARD_WIDTH=800
@@ -48,7 +86,7 @@ class Renderer:
         # Fonts and Emoji are loaded by Chromium inside the renderer container.
         return None
 
-    async def _header(self,result):
+    async def _header(self, result, *, compact_note=False):
         # Embed the original PNG so transparent logos stay sharp and have no white matte.
         try:
             raw=await asyncio.to_thread((self.RESOURCES_DIR/'logos'/f'{result.platform.name}.png').read_bytes)
@@ -58,7 +96,10 @@ class Renderer:
         badge=(f'<img class="logo" src="{logo}" alt="{text(result.platform.display_name)}">'
                if logo else '<span>'+text(result.platform.display_name)+'</span>')
         platform='<p class="platform">'+badge+'</p>'
-        if result.author is None: return '<header class="parser-header">'+platform+'</header>'
+        header_class = 'parser-header note-header' if compact_note else 'parser-header'
+        header = f'<header class="{header_class}">{platform}'
+        if result.author is None:
+            return header + '</header>'
         avatar_task=result.author.avatar
         available=True
         if isinstance(avatar_task,asyncio.Task) and not avatar_task.done():
@@ -73,8 +114,17 @@ class Renderer:
             except Exception: mark("degraded")
         uri=await asyncio.to_thread(image_uri,path,width=96,height=96)
         avatar=f'<img class="avatar" src="{uri}">' if uri else '<div class="avatar"></div>'
-        return '<header class="parser-header">'+platform+'<div class="author">'+avatar+'<div class="author-info">' \
-            +f'<strong class="text">{text(result.author.name)}</strong><p class="muted">{text(result.formatted_datetime() or "")}</p></div></div></header>'
+        if compact_note:
+            date = ''
+            if result.timestamp and result.timestamp > 0:
+                published = datetime.fromtimestamp(result.timestamp)
+                iso_date = published.date().isoformat()
+                label = f'{published.month}月{published.day}日' if published.year == datetime.now().year else iso_date
+                date = f'<time datetime="{iso_date}">{label}</time>'
+        else:
+            date = f'<p class="muted">{text(result.formatted_datetime() or "")}</p>'
+        return (f'{header}<div class="author">{avatar}<div class="author-info">'
+                f'<strong class="text">{text(result.author.name)}</strong>{date}</div></div></header>')
 
     CONTENT_WIDTH=744   # 800 - 左右各 28px 内边距
     GRID_GAP=8
@@ -95,14 +145,49 @@ class Renderer:
                 shadows.append(f'inset {16*level+16}px 0 0 #f1eee9')
         return f'padding-left:{16*depth+6}px;box-shadow:{",".join(shadows)}'
 
-    async def _grid(self,result,depth):
-        items=result.img_contents[:self.MAX_IMAGES_DISPLAY]
+    @staticmethod
+    async def _preview_paths(items):
         with phase("image_preview_wait") as timing:
-            paths=await asyncio.gather(*(item.get_preview_path() for item in items),return_exceptions=True)
-            if any(path is None or isinstance(path,BaseException) for path in paths):
-                timing.status="degraded"
-                mark("degraded")
-        paths=[path for path in paths if path is not None and not isinstance(path,BaseException)]
+            paths = await asyncio.gather(*(item.get_preview_path() for item in items), return_exceptions=True)
+            available = [p for p in paths if isinstance(p, Path)]
+            if len(available) < len(paths):
+                timing.status = 'degraded'
+                mark('degraded')
+        return available
+
+    async def _note_album(self, images, depth):
+        width = self._inner_width(depth)
+        thumb_width = (width - self.GRID_GAP) // 2
+        candidates = images[:self.MAX_IMAGES_DISPLAY]
+        tiles = []
+        # Start with three previews. Only look further if an earlier download or decode failed.
+        while candidates and len(tiles) < 3:
+            needed = 3 - len(tiles)
+            paths = await self._preview_paths(candidates[:needed])
+            candidates = candidates[needed:]
+            for path in paths:
+                if tiles:
+                    uri = await asyncio.to_thread(image_uri, path, width=thumb_width, height=thumb_width // 2, crop=True)
+                else:
+                    uri = await asyncio.to_thread(image_uri, path, width=width, height=600)
+                if uri:
+                    tiles.append(uri)
+                else:
+                    mark('degraded')
+        if not tiles:
+            return f'<p class="more">共 {len(images)} 张图片，见原始媒体。</p>'
+        remaining = len(images) - len(tiles)
+        cells = []
+        for index, uri in enumerate(tiles):
+            cell = 'album-lead' if index == 0 else 'album-thumb'
+            badge = ''
+            if remaining and index == len(tiles) - 1:
+                badge = f'<span class="media-badge">另 {remaining} 张</span>'
+            cells.append(f'<div class="{cell}"><img src="{uri}">{badge}</div>')
+        return '<div class="note-album">' + ''.join(cells) + '</div>'
+
+    async def _grid(self,result,depth):
+        paths = await self._preview_paths(result.img_contents[:self.MAX_IMAGES_DISPLAY])
         width=self._inner_width(depth)
         if len(paths)==1:
             uris=[await asyncio.to_thread(image_uri,paths[0],width=width,height=700)]
@@ -126,11 +211,22 @@ class Renderer:
     async def _items(self,result,depth=0):
         """(层级, 块 HTML) 列表；层级 0 是原帖，1 起是逐层转发。"""
         if depth>self.MAX_DEPTH: return [(depth-1,'<p class="more">更早的转发请查看原帖。</p>')]
+        platform = result.platform.name
+        images, videos = result.img_contents, result.video_contents
+        body = result.text or ''
+        note_album = (platform == 'xhs' and len(images) >= 3 and not videos
+                      and bool((result.title or '').strip() or body.strip()))
         with phase("avatar_header"):
-            header=await self._header(result)
-        blocks=[header]
+            header = await self._header(result, compact_note=note_album)
+        blocks = [header]
         if result.title:
-            blocks.extend(paragraphs(result.title,chars=300,class_name='title text'))
+            title_class = 'title note-title text' if note_album else 'title text'
+            blocks.extend(paragraphs(result.title, chars=300, class_name=title_class))
+        # A Weibo article's result.text is its *closing* paragraph, after its inline graphics.
+        social_media = platform in ('twitter', 'weibo') and (images or videos) and not result.graphics_contents
+        if note_album or social_media:
+            lead, body = _caption_lead(body)
+            blocks.extend(paragraphs(lead, class_name='note-intro text' if note_album else 'text'))
         cover=None
         try:
             with phase("cover_wait"):
@@ -138,8 +234,11 @@ class Renderer:
         except Exception: mark("degraded")
         uri=await asyncio.to_thread(image_uri,cover,width=self._inner_width(depth),height=700)
         if uri:
-            blocks.append(f'<div class="cover"><img src="{uri}"></div>')
-        elif result.img_contents:
+            duration = videos[0].duration if platform == 'bilibili' and videos else None
+            blocks.append(_video_cover(uri, duration))
+        elif note_album:
+            blocks.append(await self._note_album(images, depth))
+        elif images:
             blocks.extend(await self._grid(result,depth))
         elif result.graphics_contents:
             for item in result.graphics_contents:
@@ -153,7 +252,7 @@ class Renderer:
                 uri=await asyncio.to_thread(image_uri,path,width=self._inner_width(depth),height=700)
                 if uri: blocks.append(f'<div class="cover"><img src="{uri}"></div>')
                 if item.alt: blocks.extend(paragraphs(item.alt,chars=450,class_name='caption text'))
-        blocks.extend(paragraphs(result.text,chars=550,class_name='text'))
+        blocks.extend(paragraphs(body,chars=550,class_name='text'))
         blocks.extend(paragraphs(result.extra_info,chars=550,class_name='muted text'))
         items=[(depth,block) for block in blocks]
         if depth>0:

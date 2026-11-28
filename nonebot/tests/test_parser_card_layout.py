@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PIL import Image
 
 from card_document import image_uri, split_text
-from media_parser.core.data import Author, ImageContent, ParseResult, Platform
+from media_parser.core.data import Author, GraphicsContent, ImageContent, ParseResult, Platform, VideoContent
 from media_parser.core.render import Renderer
 
 
@@ -78,6 +78,94 @@ class ParserCardTest(unittest.IsolatedAsyncioTestCase):
             html = await self.build(ParseResult(platform=Platform('twitter', 'X'), contents=images))
         self.assertIn('repeat(2,1fr)', html)
         self.assertEqual(set(natural_sizes(html)), {(368, 368)})
+
+    async def test_captioned_note_shows_intro_then_uncropped_lead_and_two_wide_thumbnails(self):
+        with TemporaryDirectory() as folder:
+            preview = picture(folder, 'panorama', (1200, 500))
+            images = [ImageContent(Path(folder) / f'original-{i}', preview=preview) for i in range(11)]
+            result = ParseResult(platform=Platform('xhs', '小红书'), title='舞台相册', text='这张留给桌面。',
+                                 author=Author('摄影师'), timestamp=0, contents=images)
+            html = await self.build(result)
+        self.assertEqual(natural_sizes(html), [(744, 310), (368, 184), (368, 184)])
+        self.assertLess(html.index('舞台相册'), html.index('这张留给桌面。'))
+        self.assertLess(html.index('这张留给桌面。'), html.index('<img src="data:image/jpeg'))
+        self.assertEqual(html.count('这张留给桌面。'), 1)
+        self.assertIn('另 8 张', html)
+        self.assertNotIn('1970-', html)
+        self.assertEqual(len(result.img_contents), 11)
+
+    async def test_note_promotes_first_decodable_preview_and_counts_only_displayed_tiles(self):
+        with TemporaryDirectory() as folder:
+            missing = Path(folder) / 'missing'
+            corrupt = Path(folder) / 'corrupt.jpg'
+            corrupt.write_bytes(b'not an image')
+            tall = picture(folder, 'tall', (400, 800))
+            wide = picture(folder, 'wide', (900, 450))
+            images = [ImageContent(missing, preview=p) for p in (missing, corrupt, tall, wide, missing)]
+            html = await self.build(ParseResult(platform=Platform('xhs', '小红书'), title='图册', contents=images))
+            empty = await self.build(ParseResult(platform=Platform('xhs', '小红书'), text='配文仍在',
+                                                 contents=[ImageContent(missing)] * 4))
+        sizes = natural_sizes(html)
+        self.assertEqual(len(sizes), 2)
+        self.assertEqual(sizes[0][0] * 2, sizes[0][1])
+        self.assertIn('另 3 张', html)
+        self.assertEqual(natural_sizes(empty), [])
+        self.assertIn('共 4 张图片', empty)
+        self.assertEqual(empty.count('配文仍在'), 1)
+
+    async def test_three_photo_note_has_no_remainder_badge_and_long_copy_survives(self):
+        with TemporaryDirectory() as folder:
+            photo = picture(folder, 'photo', (800, 600))
+            text = '今天的记录。' * 50 + '最后一段。'
+            result = ParseResult(platform=Platform('xhs', '小红书'), text=text, contents=[ImageContent(photo)] * 3)
+            blocks = await Renderer(None)._blocks(result)
+        first_image = next(i for i, block in enumerate(blocks) if '<img src="data:image/jpeg' in block)
+        def body_text(parts):
+            return ''.join(re.findall(r'<div class="[^"]*text[^"]*">([^<]+)</div>', ''.join(parts)))
+
+        before = body_text(blocks[:first_image])
+        after = body_text(blocks[first_image + 1:])
+        self.assertTrue(before and len(before) <= 72)
+        self.assertEqual(before + after, text)
+        self.assertNotIn('另 ', ''.join(blocks))
+
+    async def test_social_caption_precedes_its_own_images_including_quoted_posts(self):
+        with TemporaryDirectory() as folder:
+            photo = picture(folder, 'photo', (600, 400))
+            for platform in ('twitter', 'weibo'):
+                with self.subTest(platform=platform):
+                    result = ParseResult(platform=Platform(platform, platform), text='分享 & 理由。\n这一行也属于短帖。', contents=[ImageContent(photo)])
+                    result.repost = ParseResult(platform=result.platform, text='被转发的原文', contents=[ImageContent(photo)])
+                    blocks = await Renderer(None)._blocks(result)
+                    outer, quoted = (''.join(b for b in blocks if b.startswith('<section') == quote) for quote in (False, True))
+                    for body, caption in ((outer, '分享 &amp; 理由。\n这一行也属于短帖。'), (quoted, '被转发的原文')):
+                        self.assertEqual(body.count(caption), 1)
+                        self.assertLess(body.index(caption), body.index('<img src="data:image/jpeg'))
+
+    async def test_weibo_article_preserves_paragraph_image_caption_and_trailing_text_order(self):
+        with TemporaryDirectory() as folder:
+            photo = picture(folder, 'photo', (600, 400))
+            result = ParseResult(platform=Platform('weibo', '微博'), text='文章结尾',
+                                 contents=[GraphicsContent(photo, text='前段', alt='图注')])
+            html = await self.build(result)
+        positions = [html.index(s) for s in ('前段', '<img src="data:image/jpeg', '图注', '文章结尾')]
+        self.assertEqual(positions, sorted(positions))
+
+    async def test_bilibili_duration_is_on_its_cover_only_when_known(self):
+        with TemporaryDirectory() as folder:
+            cover = picture(folder, 'cover', (800, 450))
+            cases = [('bilibili', cover, 222.9, '03:42'), ('bilibili', cover, 3604, '1:00:04'),
+                     ('bilibili', None, 222, None), ('twitter', cover, 222, None)]
+            cases.extend(('bilibili', cover, value, None) for value in (0, -5, 0.2, float('nan'), float('inf'), None))
+            for platform, image, seconds, label in cases:
+                with self.subTest(platform=platform, image=image, seconds=seconds):
+                    video = VideoContent(Path(folder) / 'clip.mp4', cover=image, duration=seconds)
+                    result = ParseResult(platform=Platform(platform, platform), contents=[video])
+                    blocks = await Renderer(None)._blocks(result)
+                    labels = re.findall(r'<span[^>]*>([0-9:]+)</span>', ''.join(blocks))
+                    self.assertEqual(labels, [label] if label else [])
+                    if label:
+                        self.assertTrue(any('<img src=' in b and label in b for b in blocks))
 
     async def test_reposts_form_one_continuous_quote_with_depth_bars(self):
         inner = ParseResult(platform=Platform('weibo', '微博'), author=Author('B'), text='原文')
