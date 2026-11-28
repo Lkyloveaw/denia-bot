@@ -62,10 +62,12 @@ def split_text(value, chars=650) -> list[str]:
 def paragraphs(value, *, chars=650, class_name='panel text') -> list[str]:
     return [f'<div class="{class_name}">{text(chunk)}</div>' for chunk in split_text(value, chars)]
 
-def image_uri(value: bytes | Path | None, *, width=1200, height=900, quality=84, crop=False) -> str:
+def image_uri(value: bytes | Path | None, *, width=1200, height=900, quality=84, crop=False,
+              portrait_fit_height: int | None = None) -> str:
     """Downscale and inline as JPEG. crop=True center-crops to exactly width x height, for grid
     cells shown with object-fit:cover, so thumbnails are not shrunk first and then upscaled
-    (which blurs them)."""
+    (which blurs them). With portrait_fit_height, fit an upright portrait inside width × that height
+    while keeping its entire frame."""
     if value is None:
         return ''
     from PIL import Image, ImageOps
@@ -77,7 +79,9 @@ def image_uri(value: bytes | Path | None, *, width=1200, height=900, quality=84,
             image = ImageOps.exif_transpose(image).convert('RGBA')
             matte = Image.new('RGBA', image.size, 'white')
             image = Image.alpha_composite(matte, image).convert('RGB')
-            if crop:
+            if portrait_fit_height is not None and image.height > image.width:
+                image.thumbnail((width, portrait_fit_height), Image.Resampling.LANCZOS)
+            elif crop:
                 # Small originals are not upscaled: crop the largest centered region of the target aspect ratio.
                 ratio = width / height
                 crop_w = min(image.width, image.height * ratio)
